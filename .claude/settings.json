@@ -1,0 +1,11 @@
+{
+  "env": {
+    "ANTHROPIC_AUTH_TOKEN": "sk-da39e9b1bbd246a08ef4fc92e96e6dc8",
+    "ANTHROPIC_BASE_URL": "http://127.0.0.1:8045",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "gemini-3-flash",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "gemini-3-pro-high",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "gemini-3-pro-high",
+    "ANTHROPIC_MODEL": "gemini-3-pro-high",
+    "ANTHROPIC_REASONING_MODEL": "gemini-3-pro"
+  }
+}

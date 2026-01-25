@@ -7,6 +7,8 @@
 2. 强制结果表因子列在最左侧
 """
 
+# Flask Application - Data Analysis Tool
+# Last Updated: 2026-01-21 (Sidebar Layout)
 import os
 import uuid
 import time
@@ -22,6 +24,28 @@ from statsmodels.formula.api import ols
 from scipy.stats import t, pearsonr
 import itertools
 from io import BytesIO
+
+# PCA 分析
+try:
+    from sklearn.decomposition import PCA
+    from sklearn.preprocessing import StandardScaler
+    HAS_SKLEARN = True
+except ImportError:
+    HAS_SKLEARN = False
+
+# 导入增强版 PCA 分析模块
+try:
+    from pca_analysis import PCAAnalyzer, run_pca_analysis_enhanced
+    HAS_PCA_MODULE = True
+except ImportError:
+    HAS_PCA_MODULE = False
+
+# 导入聚类分析模块
+try:
+    from clustering import ClusterAnalyzer
+    HAS_CLUSTER_MODULE = True
+except ImportError:
+    HAS_CLUSTER_MODULE = False
 
 # tkinter 仅用于本地运行时的目录选择对话框，云端部署时不可用
 try:
@@ -40,7 +64,27 @@ load_dotenv()
 app = Flask(__name__)
 # 禁止 jsonify 自动排序键 (关键修复: 保持 DataFrame 列顺序)
 app.config['JSON_SORT_KEYS'] = False
-app.json.sort_keys = False
+try:
+    app.json.sort_keys = False
+except AttributeError:
+    pass  # Flask 旧版本兼容
+
+# 全局错误处理器 - 确保所有错误返回 JSON 而不是 HTML
+@app.errorhandler(Exception)
+def handle_exception(e):
+    """捕获所有未处理的异常，返回 JSON 格式错误"""
+    import traceback
+    error_log_path = os.path.join(APP_DATA_DIR, 'error.log')
+    with open(error_log_path, 'a', encoding='utf-8') as f:
+        f.write(f'\n=== {datetime.datetime.now()} ===\n')
+        f.write(f'Error: {str(e)}\n')
+        f.write(traceback.format_exc())
+    return jsonify({'error': f'服务器内部错误: {str(e)}'}), 500
+
+@app.errorhandler(500)
+def handle_500(e):
+    """处理 500 错误"""
+    return jsonify({'error': f'服务器内部错误: {str(e)}'}), 500
 
 # 防止浏览器缓存
 @app.after_request
@@ -58,6 +102,25 @@ UPLOAD_FOLDER = 'uploads'
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-key-change-in-production')
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB max
 
+def get_app_data_dir():
+    """获取应用数据存储目录 (解决安装后无权限问题)"""
+    home = os.path.expanduser("~")
+    if sys.platform == "win32":
+        # Windows: %LOCALAPPDATA%/DataAnalysisTool
+        base_dir = os.path.join(home, "AppData", "Local", "DataAnalysisTool")
+    else:
+        # Linux/Mac: ~/.data_analysis_tool
+        base_dir = os.path.join(home, ".data_analysis_tool")
+
+    if not os.path.exists(base_dir):
+        try:
+            os.makedirs(base_dir)
+        except:
+            pass
+    return base_dir
+
+APP_DATA_DIR = get_app_data_dir()
+
 # 存储上传的数据 (带时间戳用于清理)
 data_store = {}
 data_timestamps = {}
@@ -67,7 +130,7 @@ DATA_EXPIRE_SECONDS = 3600  # 数据1小时后过期
 temp_file_store = {}
 
 # 导出文件存放目录
-EXPORT_DIR = os.path.join(os.getcwd(), 'exports')
+EXPORT_DIR = os.path.join(APP_DATA_DIR, 'exports')
 if not os.path.exists(EXPORT_DIR):
     os.makedirs(EXPORT_DIR)
 
@@ -316,7 +379,8 @@ def calculate_single_trait(sub_df, factors, t_col, test_factor):
     except Exception as e:
         err_msg = f"Error in {t_col}: {e}\n{traceback.format_exc()}"
         print(err_msg)
-        with open("last_error.txt", "w", encoding="utf-8") as f:
+        error_file = os.path.join(APP_DATA_DIR, "last_error.txt")
+        with open(error_file, "w", encoding="utf-8") as f:
             f.write(err_msg)
     
     return res
@@ -568,60 +632,118 @@ def run_analysis(df, factors, targets):
 # Flask 路由定义
 # ==========================================
 
+def analyze_column_types(df):
+    """
+    分析 DataFrame 列类型，区分因子列和指标列
+    
+    Returns:
+        dict: {
+            'column_types': {col: 'numeric'|'categorical'},
+            'suggested_factors': [...],
+            'suggested_indicators': [...]
+        }
+    """
+    column_types = {}
+    suggested_factors = []
+    suggested_indicators = []
+    
+    for col in df.columns:
+        # 尝试转换为数值
+        numeric_series = pd.to_numeric(df[col], errors='coerce')
+        non_null_count = numeric_series.notna().sum()
+        total_count = len(df)
+        
+        # 如果 80% 以上可成功转换为数值，认为是数值列
+        if total_count > 0 and (non_null_count / total_count) > 0.8:
+            column_types[col] = 'numeric'
+            suggested_indicators.append(col)
+        else:
+            column_types[col] = 'categorical'
+            suggested_factors.append(col)
+    
+    return {
+        'column_types': column_types,
+        'suggested_factors': suggested_factors,
+        'suggested_indicators': suggested_indicators
+    }
+
 @app.route('/')
 def index():
-    """渲染主页"""
-    return render_template('index.html')
+    return render_template('dashboard.html')
 
 
 @app.route('/api/upload', methods=['POST'])
 def upload():
-    """上传文件并解析列信息"""
+    """处理文件上传"""
     if 'file' not in request.files:
-        return jsonify({'error': '未找到上传文件'}), 400
+        return jsonify({'error': '未找到文件'}), 400
     
     file = request.files['file']
     if file.filename == '':
         return jsonify({'error': '未选择文件'}), 400
     
     try:
-        filename = file.filename.lower()
+        filename = file.filename
+        print(f"DEBUG: Receiving file {filename}")
         
         # 读取文件
         if filename.endswith('.csv'):
-            df = pd.read_csv(file)
-        elif filename.endswith(('.xls', '.xlsx')):
-            # 先检查是否有多个 Sheet
-            xls = pd.ExcelFile(file)
-            if len(xls.sheet_names) > 1:
-                # 暂存文件内容
-                file.seek(0)
+            file_content = file.read()
+            try:
+                df = pd.read_csv(BytesIO(file_content), encoding='utf-8')
+            except:
+                try:
+                    df = pd.read_csv(BytesIO(file_content), encoding='gbk')
+                except:
+                    df = pd.read_csv(BytesIO(file_content))
+        elif filename.endswith('.xlsx') or filename.endswith('.xls'):
+            # 记录上传内容的字节流
+            file.seek(0)
+            file_content = file.read()
+            
+            # 根据后缀名指定引擎
+            engine = 'openpyxl' if filename.endswith('.xlsx') else 'xlrd'
+            
+            # 检查是否有多个 sheet
+            xl = pd.ExcelFile(BytesIO(file_content), engine=engine)
+            if len(xl.sheet_names) > 1:
+                # 存入临时存储，等待用户选择 Sheet
                 temp_id = str(uuid.uuid4())
                 temp_file_store[temp_id] = {
-                    'content': file.read(),
-                    'filename': file.filename,
+                    'content': file_content,
+                    'sheets': xl.sheet_names,
+                    'filename': filename,
                     'timestamp': time.time()
                 }
+                
                 return jsonify({
-                    'status': 'select_sheet',
-                    'sheets': xls.sheet_names,
-                    'temp_id': temp_id
+                    'need_sheet_selection': True,
+                    'sheets': xl.sheet_names,
+                    'temp_id': temp_id,
+                    'filename': filename
                 })
             else:
-                df = pd.read_excel(xls, sheet_name=0)
+                # 只有一个 sheet
+                df = pd.read_excel(BytesIO(file_content), engine=engine)
         else:
-            return jsonify({'error': '不支持的文件格式，请上传 .csv, .xls 或 .xlsx 文件'}), 400
+            return jsonify({'error': '不支持的文件格式'}), 400
         
         # 保存数据
         data_id = str(uuid.uuid4())
         data_store[data_id] = df
         data_timestamps[data_id] = time.time()
         
-        return jsonify({
+        # 分析列类型
+        type_analysis = analyze_column_types(df)
+        
+        response_data = {
             'data_id': data_id,
             'columns': list(df.columns),
             'rows': len(df)
-        })
+        }
+        response_data.update(type_analysis)
+        
+        return jsonify(response_data)
     
     except Exception as e:
         traceback.print_exc()
@@ -652,11 +774,17 @@ def load_sheet():
         data_store[data_id] = df
         data_timestamps[data_id] = time.time()
         
-        return jsonify({
+        # 分析列类型
+        type_analysis = analyze_column_types(df)
+        
+        response_data = {
             'data_id': data_id,
             'columns': list(df.columns),
             'rows': len(df)
-        })
+        }
+        response_data.update(type_analysis)
+        
+        return jsonify(response_data)
     
     except Exception as e:
         traceback.print_exc()
@@ -666,41 +794,338 @@ def load_sheet():
 @app.route('/api/analyze', methods=['POST'])
 def analyze():
     """执行分析"""
-    data = request.json
-    data_id = data.get('data_id')
-    factors = data.get('factors', [])
-    targets = data.get('targets', [])
-    
-    if not data_id or data_id not in data_store:
-        return jsonify({'error': '数据已过期，请重新上传文件'}), 400
-    
-    if not factors or not targets:
-        return jsonify({'error': '请选择因子和性状'}), 400
-    
+    # 最外层异常捕获，确保所有错误都被记录
+    log_path = os.path.join(APP_DATA_DIR, 'debug_analyze.log')
     try:
+        data = request.json
+        data_id = data.get('data_id')
+        factors = data.get('factors', [])
+        targets = data.get('targets', [])
+
+        # 调试日志 - 写入文件 (使用绝对路径)
+        with open(log_path, 'w', encoding='utf-8') as f:
+            f.write(f'=== /api/analyze 请求 ===\n')
+            f.write(f'data_id: {data_id}\n')
+            f.write(f'factors: {factors}\n')
+            f.write(f'targets: {targets}\n')
+            f.write(f'data_store keys: {list(data_store.keys())}\n')
+
+        if not data_id or data_id not in data_store:
+            with open(log_path, 'a', encoding='utf-8') as f:
+                f.write(f'ERROR: data_id 不在 data_store 中!\n')
+            return jsonify({'error': '数据已过期，请重新上传文件'}), 400
+
+        if not factors or not targets:
+            return jsonify({'error': '请选择因子和性状'}), 400
+
         df = data_store[data_id]
-        
+        with open(log_path, 'a', encoding='utf-8') as f:
+            f.write(f'DataFrame shape: {df.shape}\n')
+            f.write(f'DataFrame columns: {list(df.columns)}\n')
+            f.write(f'检查 targets:\n')
+            for t in targets:
+                exists = t in df.columns
+                f.write(f'  {t}: {"OK" if exists else "NOT FOUND"}\n')
+
         # 运行分析
+        with open(log_path, 'a', encoding='utf-8') as f:
+            f.write('开始执行 run_analysis...\n')
+
         results, valid_targets = run_analysis(df, factors, targets)
-        
+
+        with open(log_path, 'a', encoding='utf-8') as f:
+            f.write(f'run_analysis 完成! valid_targets={valid_targets}\n')
+            f.write(f'results keys: {list(results.keys())}\n')
+
         # 转换 DataFrame 为 JSON 格式 (records)
         response = {
             'factors': factors,
             'targets': valid_targets
         }
-        
+
         for key, val in results.items():
             if isinstance(val, pd.DataFrame):
                 # 关键修复：使用 orient='records' 保持列顺序
                 response[key] = val.to_dict(orient='records')
             else:
                 response[key] = val
+
+        with open(log_path, 'a', encoding='utf-8') as f:
+            f.write('JSON 序列化完成, 准备返回响应\n')
+
+        try:
+            json_response = jsonify(response)
+            with open(log_path, 'a', encoding='utf-8') as f:
+                f.write('jsonify 成功!\n')
+            return json_response
+        except Exception as json_err:
+            with open(log_path, 'a', encoding='utf-8') as f:
+                f.write(f'jsonify 失败: {json_err}\n')
+                f.write(traceback.format_exc())
+            return jsonify({'error': f'JSON序列化失败: {str(json_err)}'}), 500
+
+    except Exception as e:
+        error_msg = f'分析失败: {str(e)}'
+        with open(log_path, 'a', encoding='utf-8') as f:
+            f.write(f'\n=== ERROR ===\n{error_msg}\n')
+            f.write(traceback.format_exc())
+            f.write('=== END ERROR ===\n')
+        return jsonify({'error': error_msg}), 500
+
+
+@app.route('/api/analyze_pca', methods=['POST'])
+def analyze_pca():
+    """执行主成分分析 (PCA) - 增强版"""
+    if not HAS_SKLEARN:
+        return jsonify({'error': 'PCA 功能需要 scikit-learn 库，请安装: pip install scikit-learn'}), 500
+    
+    data = request.json
+    data_id = data.get('data_id')
+    targets = data.get('targets', [])
+    group_by = data.get('group_by', [])  # 分组变量
+    include_plots = data.get('include_plots', True)  # 是否包含图表
+    include_scores = data.get('include_scores', True)  # 是否包含得分
+    
+    if not data_id or data_id not in data_store:
+        return jsonify({'error': '数据已过期，请重新上传文件'}), 400
+    
+    if len(targets) < 2:
+        return jsonify({'error': '主成分分析至少需要2个数值变量'}), 400
+    
+    try:
+        df = data_store[data_id].copy()
         
-        return jsonify(response)
+        # 聚类子集过滤
+        cluster_filter = data.get('cluster_filter', None)
+        
+        if cluster_filter and cluster_filter != 'all' and data_id in cluster_store:
+            cluster_info = cluster_store[data_id]
+            cluster_labels = cluster_info['labels']
+            target_cluster = int(cluster_filter)
+            
+            # 确保标签数量与数据行数匹配
+            if len(cluster_labels) == len(df):
+                # 获取属于目标聚类的行索引
+                indices = [i for i, l in enumerate(cluster_labels) if l == target_cluster]
+                
+                if len(indices) > 0:
+                    # 使用 iloc 筛选并重置索引
+                    df = df.iloc[indices].reset_index(drop=True).copy()
+                    
+                    # 样本量检查
+                    n_subset = len(df)
+                    n_features = len([t for t in targets if t in df.columns])
+                    if n_subset < 5 or n_subset < n_features:
+                        return jsonify({
+                            'error': f'聚类 {target_cluster + 1} 的样本量过小 (n={n_subset})，无法进行 PCA 分析。请选择更大的聚类或使用全部数据。'
+                        }), 400
+                else:
+                    return jsonify({'error': f'聚类 {target_cluster + 1} 不存在或没有样本'}), 400
+        
+        # 如果有分组变量，先按组计算均值
+        if group_by and len(group_by) > 0:
+            # 验证分组列存在
+            valid_group_by = [col for col in group_by if col in df.columns]
+            if len(valid_group_by) > 0:
+                # 按组计算均值（保持原始顺序）
+                valid_targets_in_df = [t for t in targets if t in df.columns]
+                agg_cols = valid_group_by + valid_targets_in_df
+                
+                # 确保数值列转换
+                work_df = df[agg_cols].copy()
+                for col in valid_targets_in_df:
+                    work_df[col] = pd.to_numeric(work_df[col], errors='coerce')
+                
+                # 按组计算均值
+                df = work_df.groupby(valid_group_by, sort=False, as_index=False).mean()
+                group_info = f"已按 {', '.join(valid_group_by)} 分组计算均值，共 {len(df)} 组"
+            else:
+                group_info = None
+        else:
+            group_info = None
+        
+        # 使用增强版 PCA 模块
+        if HAS_PCA_MODULE:
+            analyzer = PCAAnalyzer(df, targets)
+            analyzer.fit()
+            
+            results = {
+                'summary': analyzer.get_summary(),
+                'loadings': analyzer.get_loadings(),
+                'variance': analyzer.get_variance(),
+                'weights': analyzer.get_weights(),
+                'targets': analyzer.valid_targets
+            }
+            
+            # 添加分组信息
+            if group_info:
+                results['group_info'] = group_info
+            
+            # 可选包含得分
+            if include_scores:
+                results['scores'] = analyzer.get_scores()
+            
+            # 可选包含图表 (仅生成 PNG 用于网页显示)
+            if include_plots:
+                try:
+                    results['scree_plot'] = analyzer.plot_scree(format='png')
+                    results['biplot_2d'] = analyzer.plot_biplot_2d(format='png')
+                    if analyzer.n_components >= 3:
+                        results['biplot_3d'] = analyzer.plot_biplot_3d(format='png')
+                except Exception as plot_error:
+                    results['plot_error'] = str(plot_error)
+            
+            return results
+        else:
+            # 回退到基础版本
+            results = run_pca_analysis(df, targets)
+            return jsonify(results)
     
     except Exception as e:
         traceback.print_exc()
-        return jsonify({'error': f'分析失败: {str(e)}'}), 500
+        return jsonify({'error': f'PCA 分析失败: {str(e)}'}), 500
+
+
+@app.route('/api/pca_plot', methods=['POST'])
+def pca_plot():
+    """获取 PCA 图表 (支持多种格式和置信椭圆)"""
+    if not HAS_PCA_MODULE:
+        return jsonify({'error': 'PCA 图表功能不可用'}), 500
+    
+    data = request.json
+    data_id = data.get('data_id')
+    targets = data.get('targets', [])
+    plot_type = data.get('plot_type', 'scree')  # 'scree', 'biplot_2d', 'biplot_3d'
+    format = data.get('format', 'png')  # 'png', 'pdf', 'svg'
+    
+    # 椭圆参数
+    draw_ellipse = data.get('draw_ellipse', False)
+    ellipse_group = data.get('ellipse_group', None)  # 分组变量名
+    confidence_level = data.get('confidence_level', 0.95)
+    
+    if not data_id or data_id not in data_store:
+        return jsonify({'error': '数据已过期，请重新上传文件'}), 400
+    
+    try:
+        df = data_store[data_id]
+        analyzer = PCAAnalyzer(df, targets)
+        analyzer.fit()
+        
+        # 准备分组标签
+        group_labels = None
+        if ellipse_group and ellipse_group in df.columns:
+            # 使用 work_df 的索引来对齐分组标签
+            group_labels = df.loc[analyzer.work_df.index, ellipse_group].tolist()
+        
+        if plot_type == 'scree':
+            plot_data = analyzer.plot_scree(format=format)
+        elif plot_type == 'biplot_2d':
+            plot_data = analyzer.plot_biplot_2d(
+                format=format,
+                group_labels=group_labels,
+                draw_ellipse=draw_ellipse,
+                confidence_level=confidence_level
+            )
+        elif plot_type == 'biplot_3d':
+            if analyzer.n_components < 3:
+                return jsonify({'error': '主成分数量少于3，无法生成 3D 双标图'}), 400
+            plot_data = analyzer.plot_biplot_3d(format=format)
+        else:
+            return jsonify({'error': f'不支持的图表类型: {plot_type}'}), 400
+        
+        return jsonify(plot_data)
+    
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': f'图表生成失败: {str(e)}'}), 500
+
+
+def run_pca_analysis(df, targets):
+    """
+    运行主成分分析 (PCA)
+    返回: 主成分载荷、方差解释比例
+    """
+    # 准备数据: 只选择有效的数值列
+    valid_targets = []
+    missing_info = {}  # 记录缺失值信息
+    
+    for col in targets:
+        if col in df.columns:
+            numeric_series = pd.to_numeric(df[col], errors='coerce')
+            valid_count = numeric_series.notna().sum()
+            missing_count = numeric_series.isna().sum()
+            if valid_count > 0:
+                valid_targets.append(col)
+                missing_info[col] = {'valid': int(valid_count), 'missing': int(missing_count)}
+    
+    if len(valid_targets) < 2:
+        raise ValueError('有效的数值变量少于2个，无法进行 PCA 分析')
+    
+    # 提取数据并处理缺失值
+    work_df = df[valid_targets].copy()
+    for col in valid_targets:
+        work_df[col] = pd.to_numeric(work_df[col], errors='coerce')
+    
+    # 记录原始样本数
+    original_samples = len(work_df)
+    
+    # 使用均值填充策略（而非删除整行）
+    # 这样可以保留更多样本，适合变量较多的情况
+    for col in valid_targets:
+        col_mean = work_df[col].mean()
+        if pd.notna(col_mean):
+            work_df[col] = work_df[col].fillna(col_mean)
+        else:
+            # 如果整列都是 NaN，用 0 填充
+            work_df[col] = work_df[col].fillna(0)
+    
+    # 删除仍然存在缺失值的行（理论上不应有）
+    work_df = work_df.dropna()
+    
+    if len(work_df) < 3:
+        # 提供详细的诊断信息
+        info_str = ", ".join([f"{k}: {v['valid']}有效/{v['missing']}缺失" for k, v in list(missing_info.items())[:5]])
+        raise ValueError(f'有效样本数少于3（当前: {len(work_df)}），变量缺失情况: {info_str}')
+    
+    # 标准化数据
+    scaler = StandardScaler()
+    scaled_data = scaler.fit_transform(work_df)
+    
+    # 执行 PCA
+    n_components = min(len(valid_targets), len(work_df))
+    pca = PCA(n_components=n_components)
+    pca.fit(scaled_data)
+    
+    # 构建主成分载荷表
+    loadings_data = []
+    pc_names = [f'PC{i+1}' for i in range(n_components)]
+    
+    for i, var_name in enumerate(valid_targets):
+        row = {'变量': var_name}
+        for j, pc_name in enumerate(pc_names):
+            row[pc_name] = round(pca.components_[j, i], 4)
+        loadings_data.append(row)
+    
+    # 构建方差贡献表
+    variance_data = []
+    for i in range(n_components):
+        variance_data.append({
+            '主成分': f'PC{i+1}',
+            '特征值': round(pca.explained_variance_[i], 4),
+            '方差贡献率 (%)': round(pca.explained_variance_ratio_[i] * 100, 2),
+            '累计贡献率 (%)': round(sum(pca.explained_variance_ratio_[:i+1]) * 100, 2)
+        })
+    
+    return {
+        'loadings': loadings_data,
+        'variance': variance_data,
+        'targets': valid_targets,
+        'n_samples': len(work_df),
+        'n_components': n_components,
+        'imputation_used': True,  # 标记使用了填充
+        'original_samples': original_samples
+    }
+
 
 
 @app.route('/api/select_directory')
@@ -725,6 +1150,86 @@ def select_directory():
     
     except Exception as e:
         return jsonify({'success': False, 'message': f'目录选择功能仅在本地运行时可用: {str(e)}'})
+
+
+@app.route('/api/export_pca', methods=['POST'])
+def export_pca():
+    """导出 PCA 分析结果到 Excel"""
+    data = request.json
+    save_directory = data.get('save_directory', '').strip()
+    
+    # 获取要导出的内容选项
+    include_loadings = data.get('include_loadings', True)
+    include_variance = data.get('include_variance', True)
+    include_weights = data.get('include_weights', True)
+    include_scores = data.get('include_scores', True)
+    
+    # 获取分析数据
+    loadings = data.get('loadings', [])
+    variance = data.get('variance', [])
+    weights = data.get('weights', [])
+    scores = data.get('scores', [])
+    
+    temp_path = None
+    try:
+        # 确定保存路径
+        if save_directory and os.path.isdir(save_directory):
+            filename = f"PCA分析结果_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            temp_path = os.path.join(save_directory, filename)
+            is_local = True
+        else:
+            filename = f"pca_export_{uuid.uuid4().hex}.xlsx"
+            temp_path = os.path.join(EXPORT_DIR, filename)
+            is_local = False
+        
+        # 使用 openpyxl 引擎写入
+        with pd.ExcelWriter(temp_path, engine='openpyxl') as writer:
+            sheets_written = 0
+            
+            if include_loadings and loadings:
+                df = pd.DataFrame(loadings)
+                df = sanitize_dataframe(df)
+                df.to_excel(writer, sheet_name='主成分载荷', index=False)
+                sheets_written += 1
+            
+            if include_variance and variance:
+                df = pd.DataFrame(variance)
+                df = sanitize_dataframe(df)
+                df.to_excel(writer, sheet_name='方差贡献', index=False)
+                sheets_written += 1
+            
+            if include_weights and weights:
+                df = pd.DataFrame(weights)
+                df = sanitize_dataframe(df)
+                df.to_excel(writer, sheet_name='特征权重', index=False)
+                sheets_written += 1
+            
+            if include_scores and scores:
+                df = pd.DataFrame(scores)
+                df = sanitize_dataframe(df)
+                df.to_excel(writer, sheet_name='综合得分', index=False)
+                sheets_written += 1
+            
+            if sheets_written == 0:
+                pd.DataFrame({"提示": ["未选择任何导出内容"]}).to_excel(writer, sheet_name="注意事项", index=False)
+        
+        if is_local:
+            return jsonify({
+                'success': True,
+                'message': f'PCA 分析结果已保存到: {temp_path}',
+                'local_path': temp_path
+            })
+        else:
+            return send_file(
+                temp_path,
+                as_attachment=True,
+                download_name=f"PCA分析结果_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+    
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': f'PCA 导出失败: {str(e)}'}), 500
 
 
 @app.route('/api/export', methods=['POST'])
@@ -830,5 +1335,227 @@ def export_excel():
         return jsonify({'error': str(e)}), 500
 
 
+# =====================================================
+# 聚类分析 API
+# =====================================================
+
+# 存储聚类结果（用于全局过滤）
+cluster_store = {}  # {data_id: {'labels': [...], 'n_clusters': int}}
+
+
+@app.route('/api/analyze_cluster', methods=['POST'])
+def analyze_cluster():
+    """执行聚类分析"""
+    if not HAS_CLUSTER_MODULE:
+        return jsonify({'error': '聚类分析模块未安装'}), 500
+    
+    data = request.json
+    data_id = data.get('data_id')
+    features = data.get('features', [])  # 数值特征
+    factors = data.get('factors', [])    # 因子特征 (用于标记)
+    algorithm = data.get('algorithm', 'kmeans')
+    n_clusters = int(data.get('n_clusters', 3))
+    
+    # 额外参数
+    linkage_method = data.get('linkage', 'ward')
+    random_state = int(data.get('random_state', 42))
+    
+    if not data_id or data_id not in data_store:
+        return jsonify({'error': '数据已过期，请重新上传文件'}), 400
+    
+    if len(features) < 2:
+        return jsonify({'error': '聚类分析至少需要2个数值变量'}), 400
+    
+    try:
+        df = data_store[data_id]
+        
+        # 是否使用均值聚类
+        use_means = data.get('use_means', False)
+        
+        # 数据聚合逻辑
+        if use_means and len(factors) > 0:
+            # 验证因子列存在
+            valid_factors = [f for f in factors if f in df.columns]
+            if not valid_factors:
+                 return jsonify({'error': '无法使用均值聚类：未找到有效的因子列'}), 400
+            
+            # 按因子分组计算数值特征的均值
+            # 注意：sort=False 保持原始出现顺序
+            agg_df = df.groupby(valid_factors, sort=False, as_index=False)[features].mean()
+            
+            # 使用聚合后的数据进行分析
+            analyzer = ClusterAnalyzer(agg_df, features, valid_factors)
+            
+            # 提示信息
+            results_note = f"基于 {', '.join(valid_factors)} 的均值进行聚类 (共 {len(agg_df)} 个组合)"
+        else:
+            # 使用原始数据
+            analyzer = ClusterAnalyzer(df, features, factors)
+            results_note = ""
+
+        # 执行聚类
+        if algorithm == 'kmeans':
+            analyzer.fit_kmeans(n_clusters=n_clusters, random_state=random_state)
+        else:
+            analyzer.fit_hierarchical(n_clusters=n_clusters, linkage_method=linkage_method)
+        
+        # 存储聚类结果用于全局过滤
+        # 当使用均值聚类时，需要将标签映射回原始数据的每一行
+        if use_means and len(factors) > 0:
+            # 创建分组到聚类标签的映射
+            valid_factors = [f for f in factors if f in df.columns]
+            agg_labels = analyzer.labels_.tolist()
+            
+            # 获取聚合数据的分组键
+            agg_df = df.groupby(valid_factors, sort=False, as_index=False)[features].mean()
+            
+            # 为每个聚合行创建一个键
+            agg_keys = agg_df[valid_factors].apply(lambda row: tuple(row), axis=1).tolist()
+            key_to_label = dict(zip(agg_keys, agg_labels))
+            
+            # 将原始数据的每一行映射到对应的聚类标签
+            original_labels = df[valid_factors].apply(
+                lambda row: key_to_label.get(tuple(row), -1), axis=1
+            ).tolist()
+            
+            cluster_store[data_id] = {
+                'labels': original_labels,
+                'n_clusters': analyzer.n_clusters
+            }
+        else:
+            cluster_store[data_id] = {
+                'labels': analyzer.labels_.tolist(),
+                'n_clusters': analyzer.n_clusters
+            }
+        
+        # 获取结果
+        cluster_summary = analyzer.get_cluster_summary()
+        if 'results_note' in locals() and results_note:
+             cluster_summary['note'] = results_note
+             
+        results = {
+            'summary': cluster_summary,
+            'labeled_data': analyzer.get_labeled_data(),
+            'scatter_plot': analyzer.plot_cluster_scatter(format='png')
+        }
+        
+        # 层次聚类时添加树状图
+        if algorithm == 'hierarchical':
+            try:
+                results['dendrogram'] = analyzer.plot_dendrogram(format='png')
+            except Exception as e:
+                results['dendrogram_error'] = str(e)
+        
+        return jsonify(results)
+    
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': f'聚类分析失败: {str(e)}'}), 500
+
+
+@app.route('/api/cluster_elbow', methods=['POST'])
+def cluster_elbow():
+    """获取肘部法则图"""
+    if not HAS_CLUSTER_MODULE:
+        return jsonify({'error': '聚类分析模块未安装'}), 500
+    
+    data = request.json
+    data_id = data.get('data_id')
+    features = data.get('features', [])
+    max_k = data.get('max_k', 10)
+    
+    if not data_id or data_id not in data_store:
+        return jsonify({'error': '数据已过期，请重新上传文件'}), 400
+    
+    try:
+        df = data_store[data_id]
+        analyzer = ClusterAnalyzer(df, features)
+        
+        elbow_plot = analyzer.plot_elbow(max_k=max_k, format='png')
+        elbow_data = analyzer.get_elbow_data(max_k=max_k)
+        
+        return jsonify({
+            'elbow_plot': elbow_plot,
+            'elbow_data': elbow_data
+        })
+    
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': f'肘部法则计算失败: {str(e)}'}), 500
+
+
+@app.route('/api/export_cluster', methods=['POST'])
+def export_cluster():
+    """导出带聚类标签的数据"""
+    if not HAS_CLUSTER_MODULE:
+        return jsonify({'error': '聚类分析模块未安装'}), 500
+    
+    data = request.json
+    data_id = data.get('data_id')
+    features = data.get('features', [])
+    algorithm = data.get('algorithm', 'kmeans')
+    n_clusters = data.get('n_clusters', 3)
+    linkage_method = data.get('linkage_method', 'ward')
+    
+    if not data_id or data_id not in data_store:
+        return jsonify({'error': '数据已过期，请重新上传文件'}), 400
+    
+    try:
+        df = data_store[data_id]
+        analyzer = ClusterAnalyzer(df, features)
+        
+        # 执行聚类
+        if algorithm == 'kmeans':
+            analyzer.fit_kmeans(n_clusters=n_clusters)
+        else:
+            analyzer.fit_hierarchical(n_clusters=n_clusters, linkage_method=linkage_method)
+        
+        # 导出 CSV
+        csv_data = analyzer.export_to_csv()
+        
+        return send_file(
+            BytesIO(csv_data),
+            mimetype='text/csv',
+            as_attachment=True,
+            download_name=f'聚类结果_{algorithm}_k{n_clusters}.csv'
+        )
+    
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': f'导出失败: {str(e)}'}), 500
+
+
+@app.route('/api/get_cluster_subsets', methods=['GET'])
+def get_cluster_subsets():
+    """获取可用的聚类子集列表"""
+    data_id = request.args.get('data_id')
+    
+    if not data_id or data_id not in cluster_store:
+        return jsonify({
+            'available': False,
+            'subsets': [{'value': 'all', 'label': '全部数据', 'count': 0}]
+        })
+    
+    cluster_info = cluster_store[data_id]
+    labels = cluster_info['labels']
+    n_clusters = cluster_info['n_clusters']
+    
+    subsets = [{'value': 'all', 'label': '全部数据', 'count': len(labels)}]
+    for i in range(n_clusters):
+        count = sum(1 for l in labels if l == i)
+        subsets.append({
+            'value': str(i),
+            'label': f'聚类 {i+1}',
+            'count': count
+        })
+    
+    return jsonify({
+        'available': True,
+        'subsets': subsets
+    })
+
+
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    # 云端部署配置（适配 ModelScope/Render 等）
+    port = int(os.environ.get("PORT", 7860))
+    app.run(host='0.0.0.0', port=port)

@@ -5,8 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="多因子方差分析、LSD多重比较、三线表生成工具">
-    <title>数据分析工具</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <title>数据分析工具 v2.0</title>
+    <link rel="stylesheet" href="/static/style.css?v=13">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -15,135 +15,346 @@
     <div class="app-container">
         <!-- 头部 -->
         <header class="header">
-            <h1>📊 数据分析工具</h1>
+            <h1>📊 数据分析工具 <small style="font-size: 0.5em; opacity: 0.6;">v2.0布局版</small></h1>
             <p class="subtitle">多因子方差分析 · LSD多重比较 · 三线表生成</p>
         </header>
 
-        <!-- 主内容 -->
-        <main class="main-content">
-            <!-- 步骤1：文件上传 -->
-            <section class="card" id="upload-section">
-                <div class="card-header">
-                    <span class="step-badge">1</span>
-                    <h2>上传数据文件</h2>
-                </div>
-                <div class="card-body">
-                    <div class="upload-zone" id="upload-zone">
-                        <div class="upload-icon">📁</div>
-                        <p class="upload-text">点击或拖拽 Excel/CSV 文件到此处</p>
-                        <p class="upload-hint">支持 .xlsx, .xls, .csv 格式</p>
-                        <input type="file" id="file-input" accept=".csv,.xls,.xlsx" hidden>
-                    </div>
-                    <div class="file-info" id="file-info" hidden>
-                        <span class="file-name" id="file-name"></span>
-                        <span class="file-rows" id="file-rows"></span>
-                        <button class="btn-text" id="clear-file">清除</button>
-                    </div>
-                </div>
-            </section>
-
-            <!-- 步骤2：变量选择 -->
-            <section class="card" id="variable-section" hidden>
-                <div class="card-header">
-                    <span class="step-badge">2</span>
-                    <h2>选择分析变量</h2>
-                </div>
-                <div class="card-body">
-                    <div class="variable-grid">
-                        <!-- 变量池 -->
-                        <div class="variable-box">
-                            <h3>🎲 变量池</h3>
-                            <p class="box-hint">点击变量添加到右侧</p>
-                            <ul class="variable-list" id="source-list"></ul>
-                        </div>
-
-                        <!-- 因子 X -->
-                        <div class="variable-box factor-box">
-                            <h3>📌 因子 (X)</h3>
-                            <p class="box-hint">分类变量，如：品种、处理</p>
-                            <ul class="variable-list" id="factor-list"></ul>
-                        </div>
-
-                        <!-- 性状 Y -->
-                        <div class="variable-box target-box">
-                            <h3>📈 性状 (Y)</h3>
-                            <p class="box-hint">数值变量，如：产量、株高</p>
-                            <ul class="variable-list" id="target-list"></ul>
-                        </div>
-                    </div>
-
-                    <button class="btn btn-primary btn-large" id="btn-analyze">
-                        🚀 开始分析
+        <!-- 布局容器 -->
+        <div class="layout-wrapper">
+            <!-- 侧边栏导航 (初始隐蔽) -->
+            <aside class="sidebar" id="app-sidebar" hidden>
+                <nav class="nav-menu" id="analysis-type-tabs">
+                    <button class="nav-btn active" data-type="anova">
+                        📊 方差分析
                     </button>
-                </div>
-            </section>
+                    <button class="nav-btn" data-type="pca">
+                        🔬 主成分分析
+                    </button>
+                    <button class="nav-btn" data-type="cluster">
+                        🎯 聚类分析
+                    </button>
+                </nav>
+            </aside>
 
-            <!-- 加载状态 -->
-            <section class="card loading-card" id="loading-section" hidden>
-                <div class="card-body">
-                    <div class="loading-spinner"></div>
-                    <p class="loading-text">正在分析数据，请稍候...</p>
-                </div>
-            </section>
-
-            <!-- 步骤3：分析结果 -->
-            <section class="card" id="result-section" hidden>
-                <div class="card-header">
-                    <span class="step-badge">3</span>
-                    <h2>分析结果</h2>
-                    <div class="header-actions">
-                        <div class="save-path-wrapper">
-                            <input type="text" id="save-path-input" placeholder="本地保存目录 (可选，如 D:\Result)"
-                                class="save-path-input">
-                            <button class="btn btn-outline btn-small" id="btn-browse-path"
-                                style="white-space: nowrap;">浏览...</button>
+            <!-- 主内容区域 -->
+            <main class="main-content">
+                <!-- 步骤1：文件上传 -->
+                <section class="card" id="upload-section">
+                    <div class="card-header">
+                        <span class="step-badge">1</span>
+                        <h2>上传数据文件</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="upload-zone" id="upload-zone">
+                            <div class="upload-icon">📁</div>
+                            <p class="upload-text">点击或拖拽 Excel/CSV 文件到此处</p>
+                            <p class="upload-hint">支持 .xlsx, .xls, .csv 格式</p>
+                            <input type="file" id="file-input" accept=".csv,.xls,.xlsx" hidden>
                         </div>
-                        <button class="btn btn-secondary" id="btn-export">
-                            📥 导出 Excel
+                        <div class="file-info" id="file-info" hidden>
+                            <span class="file-name" id="file-name"></span>
+                            <span class="file-rows" id="file-rows"></span>
+                            <button class="btn-text" id="clear-file">清除</button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 步骤2：选择分析类型和变量 -->
+                <section class="card" id="variable-section" hidden>
+                    <div class="card-header">
+                        <span class="step-badge">2</span>
+                        <h2>选择变量</h2>
+                    </div>
+                    <div class="card-body">
+                        <!-- 分析类型选择 Tab (已移动到侧边栏) -->
+
+
+                        <div class="variable-grid">
+                            <!-- 变量池 -->
+                            <div class="variable-box">
+                                <h3>🎲 变量池</h3>
+                                <p class="box-hint">点击变量添加到右侧</p>
+                                <ul class="variable-list" id="source-list"></ul>
+                            </div>
+
+                            <!-- 因子 X (仅方差分析显示) -->
+                            <div class="variable-box factor-box" id="factor-box">
+                                <h3>📌 因子 (X)</h3>
+                                <p class="box-hint">分类变量，如：品种、处理</p>
+                                <ul class="variable-list" id="factor-list"></ul>
+                            </div>
+
+                            <!-- PCA 分组变量 (仅 PCA 模式显示) -->
+                            <div class="variable-box pca-group-box" id="pca-group-box" hidden>
+                                <h3>📁 分组变量 (可选)</h3>
+                                <p class="box-hint">选择分类变量后，将按组计算均值再进行 PCA</p>
+                                <ul class="variable-list" id="pca-group-list"></ul>
+                            </div>
+
+                            <!-- 性状 Y / 数值变量 -->
+                            <div class="variable-box target-box" id="target-box">
+                                <h3 id="target-box-title">📈 性状 (Y)</h3>
+                                <p class="box-hint" id="target-box-hint">数值变量，如：产量、株高</p>
+                                <ul class="variable-list" id="target-list"></ul>
+                            </div>
+                        </div>
+
+                        <!-- 聚类分析参数面板 -->
+                        <div class="cluster-params-panel" id="cluster-params-panel" hidden>
+                            <h4>🎯 聚类参数设置</h4>
+                            <div class="params-grid">
+                                <div class="param-group">
+                                    <label>算法:</label>
+                                    <select id="cluster-algorithm" class="form-select">
+                                        <option value="kmeans">K-Means</option>
+                                        <option value="hierarchical">层次聚类</option>
+                                    </select>
+                                </div>
+                                <div class="param-group">
+                                    <label>聚类数 K:</label>
+                                    <input type="number" id="cluster-k" class="form-input" value="3" min="2" max="20">
+                                </div>
+                                <div class="param-group" id="linkage-group" hidden>
+                                    <label>连接方法:</label>
+                                    <select id="linkage-method" class="form-select">
+                                        <option value="ward">Ward (最小方差)</option>
+                                        <option value="complete">Complete (最大距离)</option>
+                                        <option value="average">Average (平均距离)</option>
+                                        <option value="single">Single (最小距离)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group"
+                                    style="flex-direction: row; align-items: center; justify-content: space-between;">
+                                    <label for="cluster-use-means"
+                                        style="margin-bottom: 0; cursor: pointer;">使用分组均值聚类</label>
+                                    <input type="checkbox" id="cluster-use-means" style="width: auto; margin: 0;">
+                                </div>
+                                <div class="param-group">
+                                    <button class="btn btn-small btn-outline" id="btn-elbow">
+                                        📈 查看肘部图
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 全局数据过滤器 -->
+                        <div class="data-filter-panel" id="data-filter-panel" hidden>
+                            <h4>🔍 数据子集过滤</h4>
+                            <div class="filter-row">
+                                <select id="cluster-filter-select" class="form-select">
+                                    <option value="all">全部数据</option>
+                                </select>
+                                <span class="filter-info" id="filter-info"></span>
+                            </div>
+                            <p class="filter-hint">基于聚类结果，选择数据子集用于后续分析</p>
+                        </div>
+
+                        <button class="btn btn-primary btn-large" id="btn-analyze">
+                            🚀 开始分析
                         </button>
                     </div>
-                </div>
-                <div class="card-body">
-                    <!-- Tab 导航 -->
-                    <div class="tabs" id="result-tabs">
-                        <button class="tab-btn active" data-tab="sliced-sep">组内比较 (分列)</button>
-                        <button class="tab-btn" data-tab="sliced">组内比较 (组合)</button>
-                        <button class="tab-btn" data-tab="main">主效应</button>
-                        <button class="tab-btn" data-tab="anova">方差分析</button>
-                        <button class="tab-btn" data-tab="corr">相关分析</button>
+                </section>
+
+
+                <!-- 加载状态 -->
+                <section class="card loading-card" id="loading-section" hidden>
+                    <div class="card-body">
+                        <div class="loading-spinner"></div>
+                        <p class="loading-text">正在分析数据，请稍候...</p>
                     </div>
+                </section>
 
-                    <!-- Tab 内容 -->
-                    <div class="tab-content">
-                        <!-- 组内分列 -->
-                        <div class="tab-panel active" id="panel-sliced-sep">
-                            <div class="table-wrapper" id="sliced-sep-table"></div>
-                        </div>
-
-                        <!-- 组内比较 (组合) -->
-                        <div class="tab-panel" id="panel-sliced">
-                            <div class="table-wrapper" id="sliced-table"></div>
-                        </div>
-
-
-                        <!-- 主效应 -->
-                        <div class="tab-panel" id="panel-main">
-                            <div class="table-wrapper" id="main-table"></div>
-                        </div>
-
-                        <!-- 方差分析 -->
-                        <div class="tab-panel" id="panel-anova">
-                            <div class="table-wrapper" id="anova-table"></div>
-                        </div>
-
-                        <!-- 相关分析 -->
-                        <div class="tab-panel" id="panel-corr">
-                            <div class="table-wrapper" id="corr-table"></div>
+                <!-- 步骤3：分析结果 -->
+                <section class="card" id="result-section" hidden>
+                    <div class="card-header">
+                        <span class="step-badge">3</span>
+                        <h2>分析结果</h2>
+                        <div class="header-actions">
+                            <div class="save-path-wrapper">
+                                <input type="text" id="save-path-input" placeholder="本地保存目录 (可选，如 D:\Result)"
+                                    class="save-path-input">
+                                <button class="btn btn-outline btn-small" id="btn-browse-path"
+                                    style="white-space: nowrap;">浏览...</button>
+                            </div>
+                            <button class="btn btn-secondary" id="btn-export">
+                                📥 导出 Excel
+                            </button>
                         </div>
                     </div>
-                </div>
-            </section>
-        </main>
+                    <div class="card-body">
+                        <!-- Tab 导航 (方差分析结果) -->
+                        <div class="tabs" id="result-tabs" data-analysis="anova">
+                            <button class="tab-btn active" data-tab="sliced-sep">组内比较 (分列)</button>
+                            <button class="tab-btn" data-tab="sliced">组内比较 (组合)</button>
+                            <button class="tab-btn" data-tab="main">主效应</button>
+                            <button class="tab-btn" data-tab="anova">方差分析</button>
+                            <button class="tab-btn" data-tab="corr">相关分析</button>
+                        </div>
+
+                        <!-- Tab 导航 (PCA 结果) -->
+                        <div class="tabs" id="pca-result-tabs" data-analysis="pca" hidden>
+                            <button class="tab-btn active" data-tab="pca-loadings">主成分载荷</button>
+                            <button class="tab-btn" data-tab="pca-variance">方差贡献</button>
+                            <button class="tab-btn" data-tab="pca-weights">特征权重</button>
+                            <button class="tab-btn" data-tab="pca-scores">综合得分</button>
+                            <button class="tab-btn" data-tab="pca-scree">碎石图</button>
+                            <button class="tab-btn" data-tab="pca-biplot">双标图</button>
+                        </div>
+
+                        <!-- Tab 导航 (聚类结果) -->
+                        <div class="tabs" id="cluster-result-tabs" data-analysis="cluster" hidden>
+                            <button class="tab-btn active" data-tab="cluster-summary">聚类摘要</button>
+                            <button class="tab-btn" data-tab="cluster-scatter">聚类散点图</button>
+                            <button class="tab-btn" data-tab="cluster-data">聚类数据</button>
+                            <button class="tab-btn" data-tab="cluster-elbow">肘部法则</button>
+                        </div>
+
+                        <!-- Tab 内容 -->
+                        <div class="tab-content">
+                            <!-- 组内分列 -->
+                            <div class="tab-panel active" id="panel-sliced-sep">
+                                <div class="table-wrapper" id="sliced-sep-table"></div>
+                            </div>
+
+                            <!-- 组内比较 (组合) -->
+                            <div class="tab-panel" id="panel-sliced">
+                                <div class="table-wrapper" id="sliced-table"></div>
+                            </div>
+
+
+                            <!-- 主效应 -->
+                            <div class="tab-panel" id="panel-main">
+                                <div class="table-wrapper" id="main-table"></div>
+                            </div>
+
+                            <!-- 方差分析 -->
+                            <div class="tab-panel" id="panel-anova">
+                                <div class="table-wrapper" id="anova-table"></div>
+                            </div>
+
+                            <!-- 相关分析 -->
+                            <div class="tab-panel" id="panel-corr">
+                                <div class="table-wrapper" id="corr-table"></div>
+                            </div>
+
+                            <!-- PCA 主成分载荷 -->
+                            <div class="tab-panel" id="panel-pca-loadings">
+                                <div class="table-wrapper" id="pca-loadings-table"></div>
+                            </div>
+
+                            <!-- PCA 方差贡献 -->
+                            <div class="tab-panel" id="panel-pca-variance">
+                                <div class="table-wrapper" id="pca-variance-table"></div>
+                            </div>
+
+                            <!-- PCA 特征权重 -->
+                            <div class="tab-panel" id="panel-pca-weights">
+                                <div class="table-wrapper" id="pca-weights-table"></div>
+                            </div>
+
+                            <!-- PCA 综合得分 -->
+                            <div class="tab-panel" id="panel-pca-scores">
+                                <div class="table-wrapper" id="pca-scores-table"></div>
+                            </div>
+
+                            <!-- PCA 碎石图 -->
+                            <div class="tab-panel" id="panel-pca-scree">
+                                <div class="plot-container" id="pca-scree-plot">
+                                    <p class="loading-text">加载图表中...</p>
+                                </div>
+                                <div class="plot-actions">
+                                    <button class="btn btn-small btn-outline"
+                                        onclick="downloadPCAPlot('scree', 'png')">🖼
+                                        PNG</button>
+                                    <button class="btn btn-small btn-outline"
+                                        onclick="downloadPCAPlot('scree', 'pdf')">📄
+                                        PDF</button>
+                                    <button class="btn btn-small btn-outline"
+                                        onclick="downloadPCAPlot('scree', 'svg')">🎯
+                                        SVG</button>
+                                </div>
+                            </div>
+
+                            <!-- PCA 双标图 -->
+                            <div class="tab-panel" id="panel-pca-biplot">
+                                <div class="biplot-tabs">
+                                    <button class="btn btn-small active" id="btn-biplot-2d"
+                                        onclick="showBiplot('2d')">2D
+                                        双标图</button>
+                                    <button class="btn btn-small" id="btn-biplot-3d" onclick="showBiplot('3d')">3D
+                                        双标图</button>
+                                </div>
+
+                                <!-- 坐标轴选择 -->
+                                <div class="biplot-controls" id="biplot-controls" hidden>
+                                    <div class="control-group">
+                                        <label>X轴: <select id="biplot-x-select" class="form-select"></select></label>
+                                        <label>Y轴: <select id="biplot-y-select" class="form-select"></select></label>
+                                        <label id="biplot-z-label" hidden>Z轴: <select id="biplot-z-select"
+                                                class="form-select"></select></label>
+                                    </div>
+                                    <button class="btn btn-small btn-primary" onclick="updateBiplotAxis()">🔄
+                                        更新图表</button>
+                                </div>
+                                <div class="plot-container" id="pca-biplot-2d">
+                                    <p class="loading-text">加载图表中...</p>
+                                </div>
+                                <div class="plot-container" id="pca-biplot-3d" hidden>
+                                    <p class="loading-text">加载图表中...</p>
+                                </div>
+                                <div class="plot-actions">
+                                    <button class="btn btn-small btn-outline" onclick="downloadCurrentBiplot('png')">🖼
+                                        PNG</button>
+                                    <button class="btn btn-small btn-outline" onclick="downloadCurrentBiplot('pdf')">📄
+                                        PDF</button>
+                                    <button class="btn btn-small btn-outline" onclick="downloadCurrentBiplot('svg')">🎯
+                                        SVG</button>
+                                </div>
+                            </div>
+
+                            <!-- 聚类摘要 -->
+                            <div class="tab-panel" id="panel-cluster-summary">
+                                <div class="cluster-summary" id="cluster-summary-content">
+                                    <p class="loading-text">请先执行聚类分析</p>
+                                </div>
+                            </div>
+
+                            <!-- 聚类散点图 -->
+                            <div class="tab-panel" id="panel-cluster-scatter">
+                                <div class="plot-container" id="cluster-scatter-plot">
+                                    <p class="loading-text">加载图表中...</p>
+                                </div>
+                                <div class="plot-actions">
+                                    <button class="btn btn-small btn-outline"
+                                        onclick="downloadClusterPlot('scatter', 'png')">🖼 PNG</button>
+                                    <button class="btn btn-small btn-outline"
+                                        onclick="downloadClusterPlot('scatter', 'pdf')">📄 PDF</button>
+                                </div>
+                            </div>
+
+
+
+                            <!-- 聚类数据表 -->
+                            <div class="tab-panel" id="panel-cluster-data">
+                                <div class="cluster-data-actions">
+                                    <button class="btn btn-small btn-primary" id="btn-export-cluster">
+                                        📥 导出聚类数据 (CSV)
+                                    </button>
+                                </div>
+                                <div class="table-wrapper" id="cluster-data-table"></div>
+                            </div>
+
+                            <!-- 肘部法则 -->
+                            <div class="tab-panel" id="panel-cluster-elbow">
+                                <div class="plot-container" id="cluster-elbow-plot">
+                                    <p class="loading-text">点击 "查看肘部图" 按钮生成</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </main>
+        </div>
 
         <!-- 页脚 -->
         <footer class="footer">
@@ -172,7 +383,7 @@
         <span id="toast-message"></span>
     </div>
 
-    <script src="/static/app.js"></script>
+    <script src="/static/app.js?v=13"></script>
 </body>
 
 </html>

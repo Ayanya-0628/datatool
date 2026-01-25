@@ -1,42 +1,27 @@
-# 数据分析工具
+---
+title: 数据分析工具
+emoji: 📊
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+pinned: false
+license: Apache-2.0
+---
 
-多因子方差分析、LSD多重比较、三线表生成的在线工具。
+# 📊 数据分析工具 (Python Web 版)
 
-## 功能特性
+这是一个基于 Web 的简易数据分析工具，旨在为非编程背景的研究人员提供便捷的统计分析服务。
 
-- 📂 支持 Excel/CSV 文件上传
-- 📊 多因子方差分析（含交互效应）
-- 🔤 LSD 多重比较（自动字母标记）
-- 📋 三线表自动生成
-- 📥 Excel 结果导出
-- 🌐 响应式设计，支持手机访问
+## 🌟 主要功能
+*   **多因子方差分析 (ANOVA)**：支持交互作用分析。
+*   **LSD 多重比较**：自动生成显著性标记（a, b, c...）。
+*   **三线表生成**：一键生成符合学术发表要求的标准表格。
+*   **Excel 导出**：结果可直接下载为 Excel 文件。
 
-## 快速开始
+## 🚀 部署说明
+本项目已适配 ModelScope docker 创空间部署。
+- **端口**: 7860
+- **环境**: Python 3.10 + Flask + Pandas
 
-```bash
-# 克隆仓库
-git clone <your-repo-url>
-cd AntiAPP
-
-# 安装依赖
-pip install -r requirements.txt
-
-# 运行
-python app.py
-```
-
-访问 http://localhost:5000
-
-## 部署
-
-详见 [DEPLOY.md](DEPLOY.md)
-
-## 技术栈
-
-- 后端: Flask + pandas + statsmodels
-- 前端: HTML/CSS/JavaScript
-- 部署: Gunicorn
-
-## 联系
-
-问题反馈: Q 1634275559
+## 👨‍💻 作者
+Developed by [Your Name/Team] for internal research use.
