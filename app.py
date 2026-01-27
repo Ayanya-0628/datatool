@@ -883,6 +883,7 @@ def analyze_pca():
     data_id = data.get('data_id')
     targets = data.get('targets', [])
     group_by = data.get('group_by', [])  # 分组变量
+    target_configs = data.get('target_configs', {})  # 正向化配置
     include_plots = data.get('include_plots', True)  # 是否包含图表
     include_scores = data.get('include_scores', True)  # 是否包含得分
     
@@ -946,9 +947,10 @@ def analyze_pca():
         
         # 使用增强版 PCA 模块
         if HAS_PCA_MODULE:
-            analyzer = PCAAnalyzer(df, targets)
+            # 传递配置参数 (target_configs)
+            analyzer = PCAAnalyzer(df, targets, group_by=group_by, target_configs=target_configs)
             analyzer.fit()
-            
+
             results = {
                 'summary': analyzer.get_summary(),
                 'loadings': analyzer.get_loadings(),
@@ -1353,9 +1355,10 @@ def analyze_cluster():
     data_id = data.get('data_id')
     features = data.get('features', [])  # 数值特征
     factors = data.get('factors', [])    # 因子特征 (用于标记)
+    target_configs = data.get('target_configs', {})  # 正向化配置
     algorithm = data.get('algorithm', 'kmeans')
     n_clusters = int(data.get('n_clusters', 3))
-    
+
     # 额外参数
     linkage_method = data.get('linkage', 'ward')
     random_state = int(data.get('random_state', 42))
@@ -1384,13 +1387,13 @@ def analyze_cluster():
             agg_df = df.groupby(valid_factors, sort=False, as_index=False)[features].mean()
             
             # 使用聚合后的数据进行分析
-            analyzer = ClusterAnalyzer(agg_df, features, valid_factors)
-            
+            analyzer = ClusterAnalyzer(agg_df, features, valid_factors, target_configs)
+
             # 提示信息
             results_note = f"基于 {', '.join(valid_factors)} 的均值进行聚类 (共 {len(agg_df)} 个组合)"
         else:
             # 使用原始数据
-            analyzer = ClusterAnalyzer(df, features, factors)
+            analyzer = ClusterAnalyzer(df, features, factors, target_configs)
             results_note = ""
 
         # 执行聚类
@@ -1436,9 +1439,11 @@ def analyze_cluster():
         results = {
             'summary': cluster_summary,
             'labeled_data': analyzer.get_labeled_data(),
-            'scatter_plot': analyzer.plot_cluster_scatter(format='png')
+            'scatter_plot': analyzer.plot_cluster_scatter(format='png'),
+            'heatmap_plot': analyzer.plot_heatmap(format='png'),
+            'corr_heatmap_plot': analyzer.plot_corr_heatmap(format='png')
         }
-        
+
         # 层次聚类时添加树状图
         if algorithm == 'hierarchical':
             try:

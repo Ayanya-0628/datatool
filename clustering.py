@@ -8,6 +8,7 @@ import pandas as pd
 from io import BytesIO
 import base64
 import warnings
+from datetime import datetime
 
 # Sklearn imports
 try:
@@ -22,6 +23,7 @@ except ImportError:
 try:
     from scipy.cluster.hierarchy import dendrogram, linkage
     from scipy.spatial.distance import pdist
+    from scipy.stats import pearsonr
     HAS_SCIPY = True
 except ImportError:
     HAS_SCIPY = False
@@ -40,18 +42,20 @@ plt.rcParams['axes.unicode_minus'] = False
 class ClusterAnalyzer:
     """聚类分析器"""
     
-    def __init__(self, df, features, factors=None):
+    def __init__(self, df, features, factors=None, target_configs=None):
         """
         初始化聚类分析器
-        
+
         Args:
             df: 原始数据 DataFrame
             features: 用于聚类的特征列名列表 (数值变量)
             factors: 用于标记的因子列名列表 (分类变量, 可选)
+            target_configs: 变量配置字典，包含正向化类型和参数
         """
         self.df = df.copy()
         self.features = features
         self.factors = factors if factors else []
+        self.target_configs = target_configs if target_configs else {}
         self.valid_features = []
         self.labels_ = None
         self.n_clusters = None
@@ -59,10 +63,47 @@ class ClusterAnalyzer:
         self.scaler = StandardScaler()
         self.scaled_data = None
         self.linkage_matrix = None
-        
+
         # 验证和准备数据
         self._prepare_data()
     
+    @staticmethod
+    def _normalize_max(series):
+        """极大型正向化：(x - min)/(max - min)"""
+        min_val = series.min()
+        max_val = series.max()
+        if max_val == min_val:
+            return pd.Series(np.ones_like(series), index=series.index)
+        return (series - min_val) / (max_val - min_val)
+
+    @staticmethod
+    def _normalize_min(series):
+        """极小型正向化：(max - x)/(max - min)"""
+        min_val = series.min()
+        max_val = series.max()
+        if max_val == min_val:
+            return pd.Series(np.ones_like(series), index=series.index)
+        return (max_val - series) / (max_val - min_val)
+
+    @staticmethod
+    def _normalize_interval(series, a, b):
+        """区间型正向化"""
+        min_x = series.min()
+        max_x = series.max()
+        M = max(a - min_x, max_x - b)
+        if M == 0:
+            return pd.Series(np.ones_like(series), index=series.index)
+
+        res = []
+        for x in series:
+            if x < a:
+                res.append(1 - (a - x) / M)
+            elif a <= x <= b:
+                res.append(1)
+            else:
+                res.append(1 - (x - b) / M)
+        return pd.Series(res, index=series.index)
+
     def _prepare_data(self):
         """数据预处理"""
         # 筛选有效的数值列
@@ -74,16 +115,37 @@ class ClusterAnalyzer:
                         self.valid_features.append(col)
                 except:
                     pass
-        
+
         if len(self.valid_features) < 2:
             raise ValueError(f"需要至少2个有效的数值特征进行聚类，当前只有 {len(self.valid_features)} 个")
-        
+
         # 提取数据并处理缺失值（使用均值填充）
         self.data_matrix = self.df[self.valid_features].copy()
         for col in self.valid_features:
             col_mean = self.data_matrix[col].mean()
             self.data_matrix[col].fillna(col_mean, inplace=True)
-        
+
+        # === 新增：数据正向化处理 ===
+        if self.target_configs:
+            for col in self.valid_features:
+                if col in self.target_configs:
+                    config = self.target_configs[col]
+                    norm_type = config.get('type', 'benefit')
+
+                    if norm_type == 'cost':
+                        self.data_matrix[col] = self._normalize_min(self.data_matrix[col])
+                    elif norm_type == 'interval':
+                        try:
+                            a = float(config.get('a', 0))
+                            b = float(config.get('b', 0))
+                            self.data_matrix[col] = self._normalize_interval(self.data_matrix[col], a, b)
+                        except:
+                            pass
+                    else:
+                        # 默认 benefit
+                        self.data_matrix[col] = self._normalize_max(self.data_matrix[col])
+        # ===========================
+
         # 标准化
         self.scaled_data = self.scaler.fit_transform(self.data_matrix)
         
@@ -210,8 +272,8 @@ class ClusterAnalyzer:
         ax.set_ylabel('SSE (簇内平方和)', fontsize=12)
         ax.set_title('肘部法则 - 最优聚类数选择', fontsize=14, fontweight='bold')
         ax.set_xticks(k_values)
-        ax.grid(True, alpha=0.3)
-        
+        ax.grid(False)
+
         # 标注建议点（变化率最大的点）
         if len(inertias) > 2:
             # 计算变化率
@@ -331,8 +393,8 @@ class ClusterAnalyzer:
         ax.set_ylabel(f'PC2 ({var_explained[1]:.1f}%)', fontsize=12)
         ax.set_title('聚类结果可视化 (PCA 2D 投影)', fontsize=14, fontweight='bold')
         ax.legend(loc='best')
-        ax.grid(True, alpha=0.3)
-        
+        ax.grid(False)
+
         plt.tight_layout()
         
         # 保存
@@ -424,6 +486,245 @@ class ClusterAnalyzer:
         
         return summary
     
+    def plot_heatmap(self, format='png', row_cluster=True, col_cluster=True):
+        """
+        绘制聚类热图 (支持样本聚类和特征聚类)
+        模拟 Seaborn clustermap 效果，但仅使用 matplotlib + scipy
+        """
+        if not HAS_SCIPY:
+            return {'error': '绘制热图需要 scipy 库'}
+
+        # 准备数据 (使用标准化后的数据以便于比较)
+        # 或者使用归一化后的 data_matrix (0-1范围)
+        # 为了热图颜色显示清晰，通常标准化比较好，或者将 data_matrix 归一化到 0-1
+        # 这里使用 scaled_data (Z-score)
+        data = self.scaled_data
+
+        # 如果数据量太大，进行采样以避免绘图过慢
+        if data.shape[0] > 1000:
+            indices = np.linspace(0, data.shape[0]-1, 1000, dtype=int)
+            data = data[indices]
+
+        fig = plt.figure(figsize=(10, 10))
+
+        # 定义网格布局
+        # [树状图(左), 热图(中), 颜色条(右)]
+        # [空, 树状图(上), 空]
+
+        # 尺寸比例
+        left_margin = 0.1
+        bottom_margin = 0.1
+        width = 0.6
+        height = 0.6
+        dendro_size = 0.15
+
+        # 1. 计算行聚类 (样本聚类)
+        row_dendro_ax = fig.add_axes([left_margin, bottom_margin, dendro_size, height])
+        row_linkage = linkage(data, method='ward')
+        row_dendro = dendrogram(row_linkage, orientation='left', ax=row_dendro_ax, no_labels=True)
+        row_dendro_ax.set_xticks([])
+        row_dendro_ax.set_yticks([])
+        # 移除边框
+        for spine in row_dendro_ax.spines.values():
+            spine.set_visible(False)
+
+        # 根据聚类结果重排数据行
+        row_idx = row_dendro['leaves']
+        data_ordered = data[row_idx, :]
+
+        # 2. 计算列聚类 (特征聚类)
+        col_dendro_ax = fig.add_axes([left_margin + dendro_size, bottom_margin + height, width, dendro_size])
+        col_linkage = linkage(data.T, method='ward')
+        col_dendro = dendrogram(col_linkage, orientation='top', ax=col_dendro_ax, no_labels=True)
+        col_dendro_ax.set_xticks([])
+        col_dendro_ax.set_yticks([])
+        for spine in col_dendro_ax.spines.values():
+            spine.set_visible(False)
+
+        # 根据聚类结果重排数据列
+        col_idx = col_dendro['leaves']
+        data_ordered = data_ordered[:, col_idx]
+        feature_names = [self.valid_features[i] for i in col_idx]
+
+        # 3. 绘制热图
+        heatmap_ax = fig.add_axes([left_margin + dendro_size, bottom_margin, width, height])
+        im = heatmap_ax.imshow(data_ordered, aspect='auto', cmap='coolwarm', interpolation='nearest')
+
+        # 设置标签
+        heatmap_ax.set_xticks(np.arange(len(feature_names)))
+        heatmap_ax.set_xticklabels(feature_names, rotation=90, fontsize=10)
+        heatmap_ax.set_yticks([]) # 隐藏样本索引
+
+        # 4. 颜色条
+        cbar_ax = fig.add_axes([left_margin + dendro_size + width + 0.02, bottom_margin, 0.02, height])
+        plt.colorbar(im, cax=cbar_ax, label='Z-Score')
+
+        # 保存
+        buffer = BytesIO()
+        fig.savefig(buffer, format=format, dpi=150, bbox_inches='tight', facecolor='white')
+        buffer.seek(0)
+        plt.close(fig)
+
+        if format == 'svg':
+            return {'data': buffer.getvalue().decode('utf-8'), 'format': 'svg'}
+        else:
+            return {'data': base64.b64encode(buffer.getvalue()).decode('utf-8'), 'format': format}
+
+    def plot_corr_heatmap(self, format='png'):
+        """
+        绘制特征相关性聚类热图 (复刻用户提供的图片样式)
+        上半三角显示系数，下半三角显示颜色+显著性标记
+        """
+        if not HAS_SCIPY:
+            return {'error': '绘制热图需要 scipy 库'}
+
+        # 计算相关系数矩阵和 P值矩阵
+        n_vars = self.data_matrix.shape[1]
+        columns = self.data_matrix.columns.tolist()
+        corr_matrix = self.data_matrix.corr()
+        p_matrix = pd.DataFrame(np.zeros((n_vars, n_vars)), columns=columns, index=columns)
+
+        # 计算 P 值
+        for col1 in columns:
+            for col2 in columns:
+                if col1 == col2:
+                    p_matrix.loc[col1, col2] = 0.0
+                else:
+                    # 处理可能的 NaN
+                    clean_data = self.data_matrix[[col1, col2]].dropna()
+                    if len(clean_data) > 2:
+                        _, p = pearsonr(clean_data[col1], clean_data[col2])
+                        p_matrix.loc[col1, col2] = p
+                    else:
+                        p_matrix.loc[col1, col2] = 1.0
+
+        data = corr_matrix.values
+        p_values = p_matrix.values
+        names = corr_matrix.columns.tolist()
+
+        fig = plt.figure(figsize=(12, 10)) #稍微加大一点
+        # Add title with timestamp
+        current_time = datetime.now().strftime('%H:%M:%S')
+        fig.suptitle(f'Feature Correlation Clustering ({current_time})', fontsize=14, fontweight='bold')
+
+        # 布局定义
+        left_margin = 0.05
+        bottom_margin = 0.10
+        width = 0.7
+        height = 0.7
+        dendro_size = 0.12
+
+        # 1. 顶部树状图 (列聚类)
+        col_dendro_ax = fig.add_axes([left_margin + dendro_size, bottom_margin + height + 0.01, width, dendro_size])
+        linkage_matrix = linkage(data, method='ward') # 使用相关性数据进行聚类
+        col_dendro = dendrogram(linkage_matrix, orientation='top', ax=col_dendro_ax, no_labels=True)
+        col_dendro_ax.set_axis_off()
+
+        # 2. 左侧树状图 (行聚类 - 镜像)
+        row_dendro_ax = fig.add_axes([left_margin, bottom_margin, dendro_size, height])
+        # orientation='left'：根在左，叶子在右（贴近热图），符合要求
+        row_dendro = dendrogram(linkage_matrix, orientation='left', ax=row_dendro_ax, no_labels=True)
+
+        # 反转Y轴以匹配 imshow 的 'upper' origin (从上到下)
+        row_dendro_ax.invert_yaxis()
+
+        row_dendro_ax.set_axis_off()
+
+        # 获取排序索引
+        idx = col_dendro['leaves']
+        data_ordered = data[idx, :][:, idx]
+        p_ordered = p_values[idx, :][:, idx]
+        names_ordered = [names[i] for i in idx]
+
+        # 3. 热图
+        heatmap_ax = fig.add_axes([left_margin + dendro_size, bottom_margin, width, height])
+
+        # 准备掩码数据：上三角设为 NaN (不显示颜色)
+        mask = np.triu(np.ones_like(data_ordered, dtype=bool), k=1)
+        data_masked = data_ordered.copy()
+        data_masked[mask] = np.nan
+
+        # 绘制下三角热图
+        im = heatmap_ax.imshow(data_masked, aspect='auto', cmap='coolwarm', vmin=-1, vmax=1)
+
+        # 移除边框线 (Spines)
+        for spine in heatmap_ax.spines.values():
+            spine.set_visible(False)
+
+        # 设置标签
+        heatmap_ax.set_xticks(np.arange(len(names_ordered)))
+        heatmap_ax.set_yticks(np.arange(len(names_ordered)))
+        heatmap_ax.set_xticklabels(names_ordered, rotation=45, ha='right', fontsize=10)
+        heatmap_ax.set_yticklabels(names_ordered, fontsize=10)
+        heatmap_ax.yaxis.tick_right() # y轴标签在右侧
+
+        # 移除刻度线但保留文字
+        heatmap_ax.tick_params(axis='both', which='both', length=0)
+
+        # 绘制网格线 (作为边框)
+        heatmap_ax.set_xticks(np.arange(len(names_ordered) + 1) - 0.5, minor=True)
+        heatmap_ax.set_yticks(np.arange(len(names_ordered) + 1) - 0.5, minor=True)
+        # heatmap_ax.grid(which="minor", color="gray", linestyle='-', linewidth=0.5)
+        # 注意：imshow 上层遮挡 grid，所以最好手动画框或者调整 zorder
+
+        # 在格子里显示内容
+        n = len(names)
+        print(f'DEBUG: plot_corr_heatmap running. n={n}')
+        # 字体大小根据变量数量自动调整
+        font_size = 10 if n < 10 else (8 if n < 20 else 6)
+
+        if n <= 30: # 变量太多时不显示任何文本
+            for i in range(n):
+                for j in range(n):
+                    val = data_ordered[i, j]
+
+                    # 绘制单元格边框 (每个格子都画) - 黑色边框
+                    rect = plt.Rectangle((j - 0.5, i - 0.5), 1, 1, fill=False, edgecolor='black', linewidth=1, zorder=10)
+                    heatmap_ax.add_patch(rect)
+
+                    if i < j:
+                        # 上三角：显示相关系数数值
+                        # 上三角背景是白色的，边框用黑色
+                        # 注意：上面的 rect 已经画了边框，这里不需要重复画，除非为了遮挡 fill
+                        # 但是 imshow 已经被 mask 了，所以这里是透明的？
+                        # 不，imshow masked 区域通常是白色的（因为 facecolor='white'）
+                        # 为了确保上三角纯白且有黑框：
+                        rect_upper = plt.Rectangle((j - 0.5, i - 0.5), 1, 1, fill=True, facecolor='white', edgecolor='black', linewidth=1, zorder=10)
+                        heatmap_ax.add_patch(rect_upper)
+
+                        heatmap_ax.text(j, i, f"{val:.2f}", ha="center", va="center", color="black", fontsize=font_size, zorder=20)
+                    elif i > j:
+                        # 下三角：显示显著性标记
+                        p_val = p_ordered[i, j]
+                        sig = ""
+                        if p_val < 0.001: sig = "***"
+                        elif p_val < 0.01: sig = "**"
+                        elif p_val < 0.05: sig = "*"
+
+                        # 如果有显著性，显示星号；颜色根据背景深浅调整
+                        if sig:
+                            text_color = "white" if abs(val) > 0.5 else "black"
+                            # 调整星号位置，使其略微居中偏下或居中
+                            heatmap_ax.text(j, i, sig, ha="center", va="center", color=text_color, fontsize=font_size + 2, fontweight='bold', zorder=20)
+                    else:
+                        # 对角线
+                        pass
+
+        # 4. 颜色条
+        cbar_ax = fig.add_axes([left_margin + dendro_size + width + 0.12, bottom_margin + height/4, 0.02, height/2])
+        plt.colorbar(im, cax=cbar_ax, label='Correlation')
+
+        # 保存
+        buffer = BytesIO()
+        fig.savefig(buffer, format=format, dpi=150, bbox_inches='tight', facecolor='white')
+        buffer.seek(0)
+        plt.close(fig)
+
+        if format == 'svg':
+            return {'data': buffer.getvalue().decode('utf-8'), 'format': 'svg'}
+        else:
+            return {'data': base64.b64encode(buffer.getvalue()).decode('utf-8'), 'format': format}
+
     def export_to_csv(self):
         """
         导出带聚类标签的数据为 CSV 字节流

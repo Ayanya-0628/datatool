@@ -1026,9 +1026,74 @@ function renderTargetList() {
 function createVariableItem(name, type, index = -1) {
     const li = document.createElement('li');
     li.className = 'variable-item';
-    li.textContent = name;
     li.dataset.name = name;
     li.dataset.index = index;
+
+    // 内容容器
+    const content = document.createElement('span');
+    content.textContent = name;
+    li.appendChild(content);
+
+    // 针对 PCA 和 Cluster 模式下的性状变量，添加正向化控制
+    if (type === 'target' && (appState.analysisType === 'pca' || appState.analysisType === 'cluster')) {
+        const controls = document.createElement('div');
+        controls.className = 'target-controls';
+        controls.style.display = 'flex';
+        controls.style.gap = '5px';
+        controls.style.marginLeft = '10px';
+        controls.style.alignItems = 'center';
+
+        // 类型选择
+        const select = document.createElement('select');
+        select.className = 'norm-select';
+        select.style.padding = '2px';
+        select.style.fontSize = '0.8rem';
+        select.innerHTML = `
+            <option value="benefit">正向</option>
+            <option value="cost">负向</option>
+            <option value="interval">区间</option>
+        `;
+
+        // 区间参数输入框
+        const paramsDiv = document.createElement('div');
+        paramsDiv.className = 'interval-params';
+        paramsDiv.style.display = 'none'; // 默认隐藏
+        paramsDiv.style.gap = '2px';
+
+        const inputA = document.createElement('input');
+        inputA.type = 'number';
+        inputA.className = 'param-a';
+        inputA.placeholder = 'Min';
+        inputA.style.width = '50px';
+        inputA.style.fontSize = '0.8rem';
+        inputA.style.padding = '2px';
+
+        const inputB = document.createElement('input');
+        inputB.type = 'number';
+        inputB.className = 'param-b';
+        inputB.placeholder = 'Max';
+        inputB.style.width = '50px';
+        inputB.style.fontSize = '0.8rem';
+        inputB.style.padding = '2px';
+
+        paramsDiv.appendChild(inputA);
+        paramsDiv.appendChild(inputB);
+
+        // 事件监听
+        select.addEventListener('change', (e) => {
+            e.stopPropagation();
+            paramsDiv.style.display = select.value === 'interval' ? 'flex' : 'none';
+        });
+
+        // 防止点击输入框触发移除
+        [select, inputA, inputB].forEach(el => {
+            el.addEventListener('click', (e) => e.stopPropagation());
+        });
+
+        controls.appendChild(select);
+        controls.appendChild(paramsDiv);
+        li.appendChild(controls);
+    }
 
     if (type === 'source') {
         // 开启拖拽
@@ -1079,6 +1144,7 @@ function createVariableItem(name, type, index = -1) {
         const removeBtn = document.createElement('span');
         removeBtn.className = 'remove';
         removeBtn.textContent = '×';
+        removeBtn.style.marginLeft = 'auto'; // 确保在最右侧
         removeBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             removeVariable(name, type);
@@ -1271,9 +1337,37 @@ async function runAnalysis() {
             targets: appState.targets
         };
 
-        // PCA 模式下添加分组变量
-        if (isPCA && appState.pcaGroups.length > 0) {
-            requestBody.group_by = appState.pcaGroups;
+        // PCA 模式下处理配置
+        if (isPCA || isCluster) {
+            // 1. 添加分组变量 (仅 PCA)
+            if (isPCA && appState.pcaGroups.length > 0) {
+                requestBody.group_by = appState.pcaGroups;
+            }
+
+            // 2. 收集正向化配置
+            const targetConfigs = {};
+            const targetItems = document.querySelectorAll('#target-list .variable-item');
+
+            targetItems.forEach(item => {
+                const name = item.dataset.name;
+                const select = item.querySelector('.norm-select');
+
+                if (select) {
+                    const type = select.value;
+                    const config = { type: type };
+
+                    if (type === 'interval') {
+                        const inputA = item.querySelector('.param-a');
+                        const inputB = item.querySelector('.param-b');
+                        config.a = inputA ? parseFloat(inputA.value) : 0;
+                        config.b = inputB ? parseFloat(inputB.value) : 0;
+                    }
+
+                    targetConfigs[name] = config;
+                }
+            });
+
+            requestBody.target_configs = targetConfigs;
         }
 
         // 添加聚类过滤器（如果有）
@@ -2027,6 +2121,29 @@ async function runClusterAnalysis() {
     elements.resultSection.hidden = true;
     elements.btnAnalyze.disabled = true;
 
+    // 收集正向化配置
+    const targetConfigs = {};
+    const targetItems = document.querySelectorAll('#target-list .variable-item');
+
+    targetItems.forEach(item => {
+        const name = item.dataset.name;
+        const select = item.querySelector('.norm-select');
+
+        if (select) {
+            const type = select.value;
+            const config = { type: type };
+
+            if (type === 'interval') {
+                const inputA = item.querySelector('.param-a');
+                const inputB = item.querySelector('.param-b');
+                config.a = inputA ? parseFloat(inputA.value) : 0;
+                config.b = inputB ? parseFloat(inputB.value) : 0;
+            }
+
+            targetConfigs[name] = config;
+        }
+    });
+
     try {
         const response = await fetch('/api/analyze_cluster', {
             method: 'POST',
@@ -2038,7 +2155,8 @@ async function runClusterAnalysis() {
                 algorithm: appState.clusterParams.algorithm,
                 n_clusters: appState.clusterParams.n_clusters,
                 linkage_method: appState.clusterParams.linkage_method,
-                use_means: document.getElementById('cluster-use-means') ? document.getElementById('cluster-use-means').checked : false
+                use_means: document.getElementById('cluster-use-means') ? document.getElementById('cluster-use-means').checked : false,
+                target_configs: targetConfigs // 添加正向化配置
             })
         });
 
@@ -2126,7 +2244,21 @@ function renderClusterResults(data) {
         renderClusterPlot(elements.clusterScatterPlot, data.scatter_plot);
     }
 
+    // 聚类热图 (新增)
+    const heatmapContainer = document.getElementById('cluster-heatmap-plot');
+    if (data.heatmap_plot && heatmapContainer) {
+        renderClusterPlot(heatmapContainer, data.heatmap_plot);
+    } else if (heatmapContainer) {
+        heatmapContainer.innerHTML = '<div style="text-align:center; padding:20px; color:#888;">热图生成失败</div>';
+    }
 
+    // 相关性热图 (新增 - 参考用户图片)
+    const corrHeatmapContainer = document.getElementById('cluster-corr-heatmap-plot');
+    if (data.corr_heatmap_plot && corrHeatmapContainer) {
+        renderClusterPlot(corrHeatmapContainer, data.corr_heatmap_plot);
+    } else if (corrHeatmapContainer) {
+        corrHeatmapContainer.innerHTML = '<div style="text-align:center; padding:20px; color:#888;">相关性热图生成失败</div>';
+    }
 
     // 聚类数据表
     if (data.labeled_data && elements.clusterDataTable) {

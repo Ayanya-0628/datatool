@@ -237,6 +237,7 @@
                 <div class="tabs" id="cluster-result-tabs" data-analysis="cluster" hidden>
                     <button class="tab-btn active" data-tab="cluster-summary">聚类摘要</button>
                     <button class="tab-btn" data-tab="cluster-scatter">聚类散点图</button>
+                    <button class="tab-btn" data-tab="cluster-heatmap">聚类热图</button>
                     <button class="tab-btn" data-tab="cluster-data">聚类数据</button>
                     <button class="tab-btn" data-tab="cluster-elbow">肘部法则</button>
                 </div>
@@ -360,7 +361,25 @@
                         </div>
                     </div>
 
-
+                    <!-- 聚类热图 -->
+                    <div class="tab-panel" id="panel-cluster-heatmap">
+                        <div style="margin-bottom: 20px;">
+                            <h5>相关性聚类热图</h5>
+                            <div class="plot-container" id="cluster-corr-heatmap-plot" style="min-height: 500px;">
+                                <p class="loading-text">加载图表中...</p>
+                            </div>
+                        </div>
+                        <div>
+                            <h5>样本特征热图</h5>
+                            <div class="plot-container" id="cluster-heatmap-plot" style="min-height: 500px;">
+                                <p class="loading-text">加载图表中...</p>
+                            </div>
+                        </div>
+                        <div class="plot-actions">
+                            <button class="btn btn-small btn-outline" onclick="downloadClusterPlot('heatmap', 'png')">🖼
+                                PNG</button>
+                        </div>
+                    </div>
 
                     <!-- 聚类数据表 -->
                     <div class="tab-panel" id="panel-cluster-data">
