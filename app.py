@@ -717,6 +717,7 @@ def upload():
                 }
                 
                 return jsonify({
+                    'status': 'select_sheet',
                     'need_sheet_selection': True,
                     'sheets': xl.sheet_names,
                     'temp_id': temp_id,
@@ -993,32 +994,69 @@ def pca_plot():
     """获取 PCA 图表 (支持多种格式和置信椭圆)"""
     if not HAS_PCA_MODULE:
         return jsonify({'error': 'PCA 图表功能不可用'}), 500
-    
+
     data = request.json
     data_id = data.get('data_id')
     targets = data.get('targets', [])
     plot_type = data.get('plot_type', 'scree')  # 'scree', 'biplot_2d', 'biplot_3d'
     format = data.get('format', 'png')  # 'png', 'pdf', 'svg'
-    
-    # 椭圆参数
+
+    # 椭圆/分组参数
     draw_ellipse = data.get('draw_ellipse', False)
-    ellipse_group = data.get('ellipse_group', None)  # 分组变量名
+    group_by = data.get('group_by', [])  # 分组变量列表 (用于 PCA fit 时的聚合，暂未启用)
+    ellipse_group = data.get('ellipse_group', '') # 用户在图表控件中选择的具体分组变量
     confidence_level = data.get('confidence_level', 0.95)
-    
+
     if not data_id or data_id not in data_store:
         return jsonify({'error': '数据已过期，请重新上传文件'}), 400
-    
+
     try:
         df = data_store[data_id]
         analyzer = PCAAnalyzer(df, targets)
         analyzer.fit()
-        
+
         # 准备分组标签
         group_labels = None
+        permanova_stats = None
+
+        # 逻辑优化：统一处理分组列
+        # 1. 优先使用 ellipse_group (图表控件指定)
+        # 2. 其次检查 group_by (侧边栏指定)，如果是单列，也视为有效分组列
+
+        target_group_col = None
+
         if ellipse_group and ellipse_group in df.columns:
-            # 使用 work_df 的索引来对齐分组标签
-            group_labels = df.loc[analyzer.work_df.index, ellipse_group].tolist()
-        
+            target_group_col = ellipse_group
+        elif group_by:
+            valid_groups = [c for c in group_by if c in df.columns]
+            if len(valid_groups) == 1:
+                target_group_col = valid_groups[0]
+                # 顺便把这个自动推断的列名也打日志，方便调试
+                print(f"Auto-detected single group column from group_by: {target_group_col}")
+
+        # 如果确定了用于统计的分组列
+        if target_group_col:
+            # A. 生成标签
+            group_labels = df.loc[analyzer.work_df.index, target_group_col].astype(str).tolist()
+
+            # B. 计算 PERMANOVA
+            try:
+                print(f"Executing PERMANOVA for group: {target_group_col}")
+                permanova_stats = analyzer.perform_permanova(target_group_col)
+                print(f"PERMANOVA Result: {permanova_stats}")
+            except Exception as e:
+                print(f"PERMANOVA failed: {e}")
+                permanova_stats = {'error': str(e)}
+
+        # 兼容旧逻辑：多列组合 (Combined Groups)
+        # 如果前面没能确定 target_group_col (说明可能是多列组合，或者没选)
+        elif group_by:
+            valid_groups = [c for c in group_by if c in df.columns]
+            if valid_groups:
+                subset = df.loc[analyzer.work_df.index, valid_groups]
+                group_labels = subset.astype(str).agg('_'.join, axis=1).tolist()
+                # 多列组合暂不支持 PERMANOVA，除非创建临时列
+
         if plot_type == 'scree':
             plot_data = analyzer.plot_scree(format=format)
         elif plot_type == 'biplot_2d':
@@ -1026,7 +1064,8 @@ def pca_plot():
                 format=format,
                 group_labels=group_labels,
                 draw_ellipse=draw_ellipse,
-                confidence_level=confidence_level
+                confidence_level=confidence_level,
+                permanova_stats=permanova_stats
             )
         elif plot_type == 'biplot_3d':
             if analyzer.n_components < 3:
@@ -1450,7 +1489,7 @@ def analyze_cluster():
                 results['dendrogram'] = analyzer.plot_dendrogram(format='png')
             except Exception as e:
                 results['dendrogram_error'] = str(e)
-        
+
         return jsonify(results)
     
     except Exception as e:
@@ -1558,6 +1597,20 @@ def get_cluster_subsets():
         'available': True,
         'subsets': subsets
     })
+
+
+@app.route('/api/shutdown', methods=['POST'])
+def shutdown():
+    """接收前端关闭请求，终止后台进程"""
+    # 仅在非生产环境或明确允许时启用
+    print("收到关闭指令，正在终止服务...")
+
+    def kill_server():
+        time.sleep(0.5)  # 稍微等待以确保响应已发送
+        os._exit(0)      # 强制终止进程
+
+    threading.Thread(target=kill_server).start()
+    return jsonify({'status': 'shutting_down'})
 
 
 if __name__ == '__main__':

@@ -391,6 +391,108 @@ class PCAAnalyzer:
         
         return scores_data
     
+    def perform_permanova(self, group_col, n_permutations=999):
+        """
+        执行简化的 PERMANOVA 分析 (基于欧氏距离)
+
+        Args:
+            group_col: 分组列名 (必须在原始 df 中)
+            n_permutations: 置换次数
+
+        Returns:
+            dict: {
+                'f_statistic': float,
+                'p_value': float,
+                'r2': float
+            }
+        """
+        self._check_fitted()
+
+        # 获取分组标签
+        if group_col not in self.df.columns:
+            return None
+
+        # 确保索引对齐
+        # self.work_df 是经过 dropna 处理的数据
+        # 需要从原始 df 中提取对应的分组标签
+        labels = self.df.loc[self.work_df.index, group_col].astype(str).values
+
+        # 使用标准化后的数据 (self.scaled_data)
+        data = self.scaled_data
+
+        # 移除只有1个样本的组
+        unique_labels, counts = np.unique(labels, return_counts=True)
+        valid_labels = unique_labels[counts > 1]
+
+        if len(valid_labels) < 2:
+            return {'error': '有效分组少于2个 (每组至少需2个样本)'}
+
+        # 筛选数据
+        mask = np.isin(labels, valid_labels)
+        curr_data = data[mask]
+        curr_labels = labels[mask]
+
+        # 辅助函数: 计算 F 统计量
+        def calc_f_stat(X, y):
+            # 总方差 (Total Sum of Squares)
+            # SS_T = sum(||x_i - center||^2)
+            center_total = X.mean(axis=0)
+            ss_total = np.sum((X - center_total)**2)
+
+            # 组内方差 (Within-group Sum of Squares)
+            ss_within = 0
+            classes = np.unique(y)
+            n_classes = len(classes)
+            n_samples = len(y)
+
+            for c in classes:
+                X_c = X[y == c]
+                center_c = X_c.mean(axis=0)
+                ss_within += np.sum((X_c - center_c)**2)
+
+            # 组间方差
+            ss_between = ss_total - ss_within
+
+            # 自由度
+            df_between = n_classes - 1
+            df_within = n_samples - n_classes
+
+            if df_between == 0 or df_within == 0 or ss_within == 0:
+                return 0.0, 0.0
+
+            # F 统计量
+            ms_between = ss_between / df_between
+            ms_within = ss_within / df_within
+            f_stat = ms_between / ms_within
+
+            # R2 (解释度)
+            r2 = ss_between / ss_total
+
+            return f_stat, r2
+
+        # 计算观测值的 F
+        obs_f, obs_r2 = calc_f_stat(curr_data, curr_labels)
+
+        # 置换检验
+        better_count = 0
+        perm_labels = curr_labels.copy()
+
+        # 优化：如果是 2 组且样本量很大，可以考虑并行，但这里 n=999 且数据量通常不大，直接循环即可
+        for _ in range(n_permutations):
+            np.random.shuffle(perm_labels)
+            perm_f, _ = calc_f_stat(curr_data, perm_labels)
+            if perm_f >= obs_f:
+                better_count += 1
+
+        p_value = (better_count + 1) / (n_permutations + 1)
+
+        return {
+            'f_statistic': round(obs_f, 4),
+            'r2': round(obs_r2, 4),
+            'p_value': p_value,
+            'n_permutations': n_permutations
+        }
+
     def plot_scree(self, format='png', dpi=600):
         """
         生成碎石图 (Scree Plot)
@@ -436,10 +538,11 @@ class PCAAnalyzer:
         return self._export_figure(fig, format)
     
     def plot_biplot_2d(self, pc_x=1, pc_y=2, format='png', dpi=600,
-                        group_labels=None, draw_ellipse=False, confidence_level=0.95):
+                        group_labels=None, draw_ellipse=False, confidence_level=0.95,
+                        permanova_stats=None):
         """
         生成 2D 双标图 (Biplot)，支持分组着色和置信椭圆
-        
+
         Args:
             pc_x: X 轴主成分编号 (1-based)
             pc_y: Y 轴主成分编号 (1-based)
@@ -448,48 +551,49 @@ class PCAAnalyzer:
             group_labels: 分组标签数组，长度应与样本数相同
             draw_ellipse: 是否绘制置信椭圆
             confidence_level: 置信水平 (0.50-0.99)
-            
+            permanova_stats: PERMANOVA 统计结果 dict (可选)
+
         Returns:
             str: Base64 编码的图像数据 (PNG) 或二进制数据 (PDF/SVG)
         """
         self._check_fitted()
         self._check_matplotlib()
-        
+
         # 转换为 0-based 索引
         idx_x, idx_y = pc_x - 1, pc_y - 1
-        
+
         if idx_x >= self.n_components or idx_y >= self.n_components:
             raise ValueError(f'主成分索引超出范围，最大为 {self.n_components}')
-        
+
         fig, ax = plt.subplots(figsize=(10, 8), dpi=dpi)
-        
+
         # 获取得分
         scores = self.pca.transform(self.scaled_data)
         score_x = scores[:, idx_x]
         score_y = scores[:, idx_y]
-        
+
         # 颜色映射
-        colors = ['#2196F3', '#4CAF50', '#FF9800', '#E91E63', '#9C27B0', 
+        colors = ['#2196F3', '#4CAF50', '#FF9800', '#E91E63', '#9C27B0',
                   '#00BCD4', '#795548', '#607D8B', '#F44336', '#3F51B5']
-        
+
         # 根据是否有分组标签决定绘制方式
         if group_labels is not None and len(group_labels) == len(score_x):
             # 获取唯一分组
             unique_groups = list(dict.fromkeys(group_labels))  # 保持顺序
-            
+
             # 置信水平转换为 n_std
             # 对于 2D 椭圆 (df=2)，95% 对应 chi2.ppf(0.95, 2) ≈ 5.991, sqrt ≈ 2.448
             from scipy.stats import chi2
             n_std = np.sqrt(chi2.ppf(confidence_level, 2))
-            
+
             for i, group in enumerate(unique_groups):
                 color = colors[i % len(colors)]
                 mask = np.array([g == group for g in group_labels])
-                
+
                 # 绘制该组的散点
-                ax.scatter(score_x[mask], score_y[mask], 
+                ax.scatter(score_x[mask], score_y[mask],
                           c=color, alpha=0.6, s=50, label=str(group))
-                
+
                 # 绘制置信椭圆 (带半透明填充)
                 if draw_ellipse and mask.sum() >= 3:
                     draw_confidence_ellipse(
@@ -501,16 +605,44 @@ class PCAAnalyzer:
                         linestyle='-',
                         alpha=0.15  # 低透明度实现阴影效果
                     )
-            
-            ax.legend(title='分组', loc='best', fontsize=9)
+
+            legend = ax.legend(title='分组', loc='best', fontsize=9)
+
+            # 添加 PERMANOVA 标注
+            if permanova_stats:
+                if 'p_value' in permanova_stats:
+                    p_val = permanova_stats['p_value']
+                    r2 = permanova_stats.get('r2', 0)
+
+                    # 格式化 P 值
+                    p_str = f"< 0.001" if p_val < 0.001 else f"= {p_val:.3f}"
+                    text_str = f"PERMANOVA\n$R^2$ = {r2:.3f}\n$p$ {p_str}"
+
+                    box_color = '#B71C1C'
+                elif 'error' in permanova_stats:
+                    text_str = f"PERMANOVA N/A\n{permanova_stats['error']}"
+                    box_color = 'gray'
+                else:
+                    text_str = ""
+                    box_color = 'gray'
+
+                if text_str:
+                    # 使用 ax.text 固定在右下角 (坐标轴坐标系)
+                    # x=0.98, y=0.02 (右下角)
+                    ax.text(0.98, 0.02, text_str,
+                            transform=ax.transAxes,
+                            fontsize=10, fontweight='bold', color=box_color,
+                            ha='right', va='bottom', zorder=100,
+                            bbox=dict(boxstyle="round,pad=0.4", fc="white", ec=box_color, alpha=0.9))
+
         else:
             # 无分组标签，使用单一颜色
             ax.scatter(score_x, score_y, c='#2196F3', alpha=0.6, s=50, label='样本')
-        
+
         # 绘制载荷向量
         loadings = self.pca.components_
         scale_factor = max(np.abs(scores).max(), 1) * 0.8
-        
+
         for i, var_name in enumerate(self.valid_targets):
             ax.arrow(0, 0, 
                      loadings[idx_x, i] * scale_factor, 
@@ -543,63 +675,110 @@ class PCAAnalyzer:
     
     def plot_biplot_3d(self, pc_x=1, pc_y=2, pc_z=3, format='png', dpi=600):
         """
-        生成 3D 双标图 (Biplot)
-        
+        生成美化版 3D 双标图 (Biplot)
+
         Args:
             pc_x, pc_y, pc_z: 三个轴的主成分编号 (1-based)
             format: 输出格式 ('png', 'pdf', 'svg')
             dpi: 图像分辨率
-            
+
         Returns:
             str: Base64 编码的图像数据 (PNG) 或二进制数据 (PDF/SVG)
         """
         self._check_fitted()
         self._check_matplotlib()
-        
+
         # 检查是否有足够的主成分
         if self.n_components < 3:
             raise ValueError('主成分数量少于3，无法生成 3D 双标图')
-        
+
         # 转换为 0-based 索引
         idx_x, idx_y, idx_z = pc_x - 1, pc_y - 1, pc_z - 1
-        
+
         fig = plt.figure(figsize=(12, 10), dpi=dpi)
         ax = fig.add_subplot(111, projection='3d')
-        
-        # 获取得分
+
+        # --- 1. 样式设置 ---
+        # 白色背景
+        ax.set_facecolor('white')
+        fig.patch.set_facecolor('white')
+
+        # 恢复默认网格但颜色变浅，保留空间感
+        ax.grid(True, linestyle=':', alpha=0.3)
+
+        # 设置背景板颜色为极淡的灰色，增强立体感
+        pane_color = (0.95, 0.95, 0.95, 0.5)
+        ax.xaxis.set_pane_color(pane_color)
+        ax.yaxis.set_pane_color(pane_color)
+        ax.zaxis.set_pane_color(pane_color)
+
+        # 绘制穿过原点的轴线 (参考线)
+        # 获取当前视图范围
+        max_limit = max(np.max(np.abs(scores[:, [idx_x, idx_y, idx_z]]))) * 1.1
+        ax.set_xlim(-max_limit, max_limit)
+        ax.set_ylim(-max_limit, max_limit)
+        ax.set_zlim(-max_limit, max_limit)
+
+        # 黑色虚线表示坐标轴
+        ax.plot([-max_limit, max_limit], [0, 0], [0, 0], 'k--', lw=0.8, alpha=0.4)
+        ax.plot([0, 0], [-max_limit, max_limit], [0, 0], 'k--', lw=0.8, alpha=0.4)
+        ax.plot([0, 0], [0, 0], [-max_limit, max_limit], 'k--', lw=0.8, alpha=0.4)
+
+        # --- 2. 绘制样本点 ---
         scores = self.pca.transform(self.scaled_data)
-        
-        # 绘制样本点
+
+        # 绘制主散点 (带边缘，半透明)
         ax.scatter(scores[:, idx_x], scores[:, idx_y], scores[:, idx_z],
-                   c='#2196F3', alpha=0.6, s=50, label='样本')
-        
-        # 绘制载荷向量
+                   c='#2196F3', alpha=0.7, s=60,
+                   edgecolor='white', linewidth=0.5, label='样本')
+
+        # --- 3. 绘制投影 (增强立体感) ---
+        # 在底部平面 (Z轴最小值) 绘制阴影
+        z_min = scores[:, idx_z].min()
+        offset = (scores[:, idx_z].max() - z_min) * 0.1
+        z_floor = z_min - offset
+
+        ax.scatter(scores[:, idx_x], scores[:, idx_y], np.full_like(scores[:, idx_z], z_floor),
+                   c='#2196F3', alpha=0.1, s=30, marker='.', zorder=-1)
+
+        # --- 4. 绘制载荷向量 ---
         loadings = self.pca.components_
-        scale_factor = max(np.abs(scores[:, :3]).max(), 1) * 0.8
-        
+        # 计算缩放因子，使箭头长度与数据分布匹配
+        max_score = np.max(np.abs(scores[:, [idx_x, idx_y, idx_z]]))
+        max_loading = np.max(np.abs(loadings[[idx_x, idx_y, idx_z], :]))
+        scale_factor = max_score / max_loading * 0.8
+
         for i, var_name in enumerate(self.valid_targets):
-            ax.quiver(0, 0, 0,
-                      loadings[idx_x, i] * scale_factor,
-                      loadings[idx_y, i] * scale_factor,
-                      loadings[idx_z, i] * scale_factor,
-                      color='#F44336', alpha=0.8, arrow_length_ratio=0.1)
-            ax.text(loadings[idx_x, i] * scale_factor * 1.2,
-                    loadings[idx_y, i] * scale_factor * 1.2,
-                    loadings[idx_z, i] * scale_factor * 1.2,
-                    var_name, fontsize=9, color='#D32F2F')
-        
-        # 样式
+            # 向量坐标
+            u = loadings[idx_x, i] * scale_factor
+            v = loadings[idx_y, i] * scale_factor
+            w = loadings[idx_z, i] * scale_factor
+
+            # 绘制线条 (箭杆)
+            ax.plot([0, u], [0, v], [0, w], color='#D32F2F', alpha=0.6, linewidth=1.5)
+
+            # 绘制箭头尖端 (用 scatter 模拟，比 quiver 更易控制)
+            ax.scatter([u], [v], [w], color='#D32F2F', s=20, marker='^')
+
+            # 添加文字标签 (稍微向外延伸)
+            ax.text(u * 1.1, v * 1.1, w * 1.1,
+                    var_name, fontsize=10, fontweight='bold', color='#B71C1C')
+
+        # --- 5. 坐标轴与标签 ---
         var_x = self.pca.explained_variance_ratio_[idx_x] * 100
         var_y = self.pca.explained_variance_ratio_[idx_y] * 100
         var_z = self.pca.explained_variance_ratio_[idx_z] * 100
-        
-        ax.set_xlabel(f'PC{pc_x} ({var_x:.1f}%)', fontsize=10)
-        ax.set_ylabel(f'PC{pc_y} ({var_y:.1f}%)', fontsize=10)
-        ax.set_zlabel(f'PC{pc_z} ({var_z:.1f}%)', fontsize=10)
-        ax.set_title('3D 主成分分析双标图', fontsize=14, fontweight='bold')
-        
+
+        ax.set_xlabel(f'PC{pc_x} ({var_x:.1f}%)', fontsize=11, fontweight='bold', labelpad=10)
+        ax.set_ylabel(f'PC{pc_y} ({var_y:.1f}%)', fontsize=11, fontweight='bold', labelpad=10)
+        ax.set_zlabel(f'PC{pc_z} ({var_z:.1f}%)', fontsize=11, fontweight='bold', labelpad=10)
+        ax.set_title(f'3D 主成分双标图 (Biplot)', fontsize=15, fontweight='bold', y=1.02)
+
+        # 设置合适的视角 (俯视 + 侧视)
+        ax.view_init(elev=25, azim=45)
+
         plt.tight_layout()
-        
+
         return self._export_figure(fig, format)
     
     def get_summary(self):
