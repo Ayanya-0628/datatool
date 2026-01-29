@@ -433,7 +433,11 @@ def run_analysis(df, factors, targets):
 
         valid_targets.append(t_col)
         tasks.append((sub_df, factors, t_col, test_factor))
-    
+
+    # 关键：捕获原始 DataFrame 中的列顺序，确保结果表中的指标顺序与输入文件一致
+    target_order_map = {t: i for i, t in enumerate(df.columns) if t in targets}
+    valid_targets = sorted(valid_targets, key=lambda x: target_order_map.get(x, 999))
+
     # --- 3. Execute Calculation ---
     # We collect raw rows first, then pivot/format systematically
     raw_results = {
@@ -501,7 +505,24 @@ def run_analysis(df, factors, targets):
     # (A) ANOVA
     if raw_results['anova_rows']:
         df_anova = pd.DataFrame(raw_results['anova_rows'])
-        results['anova'] = df_anova.pivot(index='Source', columns='指标', values='Value').reset_index()
+        df_pivot = df_anova.pivot(index='Source', columns='指标', values='Value').reset_index()
+
+        # 按照原始文件顺序重新排序列 (指标)
+        anova_cols = ['Source'] + [t for t in valid_targets if t in df_pivot.columns]
+        df_pivot = df_pivot.reindex(columns=anova_cols)
+
+        # 自定义排序逻辑：单因子 -> 交互项 -> 残差
+        def get_source_rank(source):
+            if source == 'Residual':
+                return 1000
+            if ":" in source:
+                return 500
+            if source in factors:
+                return factors.index(source)
+            return 900
+
+        df_pivot['Rank'] = df_pivot['Source'].map(get_source_rank)
+        results['anova'] = df_pivot.sort_values('Rank').drop(columns=['Rank'])
 
     # (B) Main Effects (Main Table)
     if raw_results['main_rows']:
@@ -598,9 +619,11 @@ def run_analysis(df, factors, targets):
         cols = list(df_pivot.columns)
         facs = [c for c in cols if c in factors]
         others = [c for c in cols if c not in factors]
+        # 按照原始文件中的指标出现顺序对指标列进行排序
+        others_sorted = sorted(others, key=lambda x: target_order_map.get(x, 999))
         # Sort factors by user user selection
         facs_sorted = [f for f in factors if f in facs]
-        results['sliced_comb'] = df_pivot[facs_sorted + others]
+        results['sliced_comb'] = df_pivot[facs_sorted + others_sorted]
 
     # (E) Correlation
     if len(valid_targets) > 1:
