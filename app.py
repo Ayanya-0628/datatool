@@ -527,30 +527,19 @@ def run_analysis(df, factors, targets):
     # (B) Main Effects (Main Table)
     if raw_results['main_rows']:
         df_raw = pd.DataFrame(raw_results['main_rows'])
-        # Filter for Mean/Letter/SD
-        df_std = df_raw[df_raw['Type'].isin(['Mean', 'Letter', 'SD'])].copy()
-        
-        # Pivot: Index=[Factor, Level], Columns=[指标, Type]
-        # We temporarily set Factor/Level as categorical to sort the pivot index automatically
-        for f in ['Factor', 'Level']: # 'Factor' col contains factor names, 'Level' col contains level names
-             pass # Logic for main effects is slightly different as 'Factor' is a column itself
-        
-        # Manually constructing pivot to avoid multi-index complexity issues
-        df_pivot = df_std.pivot_table(
-            index=['Factor', 'Level'], 
-            columns=['指标', 'Type'], 
-            values='Value', 
+
+        # Filter for Combined (Mean + Letter)
+        df_comb = df_raw[df_raw['Type'] == 'Combined'].copy()
+
+        # Pivot: Index=[Factor, Level], Columns=[指标]
+        df_pivot = df_comb.pivot_table(
+            index=['Factor', 'Level'],
+            columns='指标',
+            values='Value',
             aggfunc='first'
-        )
-        
-        # Flatten Columns
-        new_cols = [f"{t} | {m}" for t, m in df_pivot.columns]
-        df_pivot.columns = new_cols
-        df_pivot = df_pivot.reset_index()
-        
-        # Re-sort Rows: 
-        # Main Effects table has mixed factors in the 'Factor' column.
-        # We enable a SortKey.
+        ).reset_index()
+
+        # Re-sort Rows
         sort_map = {}
         idx = 0
         for f in factors:
@@ -558,31 +547,15 @@ def run_analysis(df, factors, targets):
                 for val in file_orders[f]:
                     sort_map[(f, val)] = idx
                     idx += 1
-        
+
         df_pivot['SortKey'] = df_pivot.apply(lambda r: sort_map.get((r['Factor'], r['Level']), 99999), axis=1)
         df_pivot = df_pivot.sort_values('SortKey').drop(columns=['SortKey'])
-        
-        # Re-sort Columns
-        # For Main input, 'factors' list isn't columns, but rows. 
-        # Columns are Factor, Level, + Metrics.
-        base_cols = ['Factor', 'Level']
-        final_main_cols = base_cols + [c for c in df_pivot.columns if c not in base_cols]
-        # Re-order metric columns strictly
-        strict_metric_cols = []
-        for t in valid_targets:
-            for m in ['Mean', 'Letter', 'SD']:
-                cname = f"{t} | {m}"
-                if cname in df_pivot.columns:
-                    strict_metric_cols.append(cname)
-        
-        results['main'] = df_pivot[base_cols + strict_metric_cols]
 
-        # (B-2) Main Effects (Combined)
-        df_comb_raw = df_raw[df_raw['Type'] == 'Combined'].copy()
-        df_comb_pivot = df_comb_raw.pivot_table(index=['Factor', 'Level'], columns='指标', values='Value', aggfunc='first').reset_index()
-        # Sort rows same way
-        df_comb_pivot['SortKey'] = df_comb_pivot.apply(lambda r: sort_map.get((r['Factor'], r['Level']), 99999), axis=1)
-        results['main_combined'] = df_comb_pivot.sort_values('SortKey').drop(columns=['SortKey'])
+        # Re-sort Columns (Factor, Level, + Targets in order)
+        base_cols = ['Factor', 'Level']
+        target_cols = [t for t in valid_targets if t in df_pivot.columns]
+
+        results['main'] = df_pivot[base_cols + target_cols]
 
     # (C) Sliced Separation (The Core Issue)
     if raw_results['sliced_sep_rows']:
