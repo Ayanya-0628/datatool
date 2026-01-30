@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-数据分析工具 - 专业桌面版启动器 (PyQt6)
-使用 Qt WebEngine 提供原生应用体验
+数据分析工具 - 轻量版启动器
+启动本地 Flask 服务并调用系统浏览器
 """
 
 import sys
@@ -11,6 +11,7 @@ import threading
 import time
 import ctypes
 import traceback
+import webbrowser
 
 # --- 关键修复：防止无控制台模式下 print/stderr 报错 ---
 class NullWriter:
@@ -26,35 +27,11 @@ if sys.stderr is None:
     sys.stderr = NullWriter()
 # ----------------------------------------------------
 
-# 导入 PyQt6 模块
-from PyQt6.QtWidgets import QApplication, QMainWindow, QMessageBox, QFileDialog
-from PyQt6.QtWebEngineWidgets import QWebEngineView
+# 导入 PyQt6 模块 (仅保留基本组件)
+from PyQt6.QtWidgets import (QApplication, QMainWindow, QMessageBox, QFileDialog,
+                             QWidget, QVBoxLayout, QLabel, QPushButton, QHBoxLayout)
 from PyQt6.QtCore import QUrl, QTimer, QObject, pyqtSignal, Qt
-from PyQt6.QtGui import QIcon
-
-# --- 性能优化：移除激进参数，改用 DPI 适配 ---
-# 1. 移除可能导致负优化的 GPU 强制参数
-if "QTWEBENGINE_CHROMIUM_FLAGS" in os.environ:
-    del os.environ["QTWEBENGINE_CHROMIUM_FLAGS"]
-
-# 2. 启用高分屏自动缩放 (解决渲染过重导致的卡顿)
-os.environ["QT_ENABLE_HIGHDPI_SCALING"] = "1"
-os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "1"
-
-# 3. 终极性能优化：强制使用 ANGLE (DirectX 11) 后端
-# 这通常能解决 Windows 上 Qt WebEngine 滚动卡顿的问题
-os.environ["QT_OPENGL"] = "angle"
-os.environ["QT_ANGLE_PLATFORM"] = "d3d11"
-
-# 4. 恢复 GPU 栅格化 (在 ANGLE 模式下通常是安全的，且能进一步提升滚动性能)
-# 增加 --disable-frame-rate-limit 解除 60fps 限制，提升高刷屏体验
-os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = (
-    "--enable-gpu-rasterization "
-    "--disable-gpu-vsync "
-    "--disable-frame-rate-limit "
-    "--enable-accelerated-2d-canvas"
-)
-# --------------------------------
+from PyQt6.QtGui import QIcon, QFont
 
 # 导入 Flask 应用
 from app import app
@@ -98,24 +75,60 @@ class MainWindow(QMainWindow):
     def __init__(self, port):
         super().__init__()
         self.port = port
+        self.url = f"http://127.0.0.1:{self.port}"
 
         # 连接信号
         dialog_signal.request_directory.connect(self.open_directory_dialog)
 
         self.initUI()
 
+        # 启动后自动打开浏览器
+        QTimer.singleShot(500, lambda: webbrowser.open(self.url))
+
     def initUI(self):
-        self.setWindowTitle('数据分析工具 - 专业版')
-        self.resize(1280, 850)
-        self.setMinimumSize(800, 600)
+        self.setWindowTitle('数据分析工具 - 服务控制器')
+        self.resize(400, 220)
+        self.setFixedSize(400, 220)  # 固定大小
 
-        # 创建浏览器视图
-        self.browser = QWebEngineView()
-        self.setCentralWidget(self.browser)
+        # 中心部件
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
 
-        # 加载本地 Flask 页面
-        url = f"http://127.0.0.1:{self.port}"
-        self.browser.setUrl(QUrl(url))
+        layout = QVBoxLayout()
+        layout.setSpacing(15)
+        layout.setContentsMargins(30, 30, 30, 30)
+
+        # 状态标签
+        self.status_label = QLabel(f"服务正在运行\n{self.url}")
+        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        font = QFont()
+        font.setPointSize(12)
+        self.status_label.setFont(font)
+        layout.addWidget(self.status_label)
+
+        # 按钮区域
+        btn_layout = QHBoxLayout()
+
+        self.btn_open = QPushButton("在浏览器中打开")
+        self.btn_open.setMinimumHeight(40)
+        self.btn_open.clicked.connect(lambda: webbrowser.open(self.url))
+
+        self.btn_exit = QPushButton("退出程序")
+        self.btn_exit.setMinimumHeight(40)
+        self.btn_exit.clicked.connect(self.close)
+
+        btn_layout.addWidget(self.btn_open)
+        btn_layout.addWidget(self.btn_exit)
+
+        layout.addLayout(btn_layout)
+
+        # 说明文字
+        info_label = QLabel("提示: 程序运行期间请勿关闭此窗口")
+        info_label.setStyleSheet("color: gray; font-size: 10px;")
+        info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(info_label)
+
+        central_widget.setLayout(layout)
 
         if os.path.exists('static/favicon.ico'):
             self.setWindowIcon(QIcon('static/favicon.ico'))
@@ -125,6 +138,10 @@ class MainWindow(QMainWindow):
         try:
             # 窗口置顶，确保用户能看到
             self.activateWindow()
+            # 恢复窗口（如果是最小化）
+            if self.isMinimized():
+                self.showNormal()
+
             directory = QFileDialog.getExistingDirectory(self, "选择保存结果的文件夹")
             dialog_result["path"] = directory
         except Exception as e:
@@ -146,6 +163,7 @@ def find_free_port(start_port=7860):
     return start_port
 
 def start_flask(port):
+    # 使用 threaded=True 确保 Flask 能处理并发请求
     run_simple('127.0.0.1', port, app, use_reloader=False, use_debugger=False, threaded=True)
 
 def main():
@@ -158,17 +176,17 @@ def main():
     port = find_free_port(7860)
     os.environ['PORT'] = str(port)
 
+    # 启动 Flask 线程
     flask_thread = threading.Thread(target=start_flask, args=(port,))
     flask_thread.daemon = True
     flask_thread.start()
 
+    # 启动 GUI
     qt_app = QApplication(sys.argv)
     qt_app.setApplicationName("数据分析工具")
 
     window = MainWindow(port)
     window.show()
-
-    QTimer.singleShot(1000, lambda: window.browser.reload())
 
     sys.exit(qt_app.exec())
 

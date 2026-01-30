@@ -62,6 +62,14 @@ from dotenv import load_dotenv
 load_dotenv()
 
 app = Flask(__name__)
+# 关键修复：PyInstaller 单文件打包资源路径适配
+if getattr(sys, 'frozen', False):
+    template_folder = os.path.join(sys._MEIPASS, 'templates')
+    static_folder = os.path.join(sys._MEIPASS, 'static')
+    app = Flask(__name__, template_folder=template_folder, static_folder=static_folder)
+else:
+    app = Flask(__name__)
+
 # 禁止 jsonify 自动排序键 (关键修复: 保持 DataFrame 列顺序)
 app.config['JSON_SORT_KEYS'] = False
 try:
