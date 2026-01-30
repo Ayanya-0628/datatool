@@ -17,6 +17,7 @@ const state = {
     // PCA Config
     pcaSelectedVars: [],
     pcaGroupVar: '',
+    targetConfigs: {}, // { col: { type, a, b } }
 
     // Cluster Config
     clusterParams: {
@@ -105,6 +106,7 @@ function init() {
     initMethodSelection();
     initVariableModal();
     initClusterControls();
+    initConfigModal();
     initAnalysis();
     initExport();
     initTabs();
@@ -204,6 +206,7 @@ function clearData() {
     state.targets = [];
     state.pcaSelectedVars = [];
     state.pcaGroupVars = [];
+    state.targetConfigs = {};
 
     dom.fileInput.value = '';
     dom.uploadPanel.hidden = false;
@@ -474,9 +477,39 @@ function createTargetListPanel(title, items, listKey) {
     items.forEach(item => {
         const li = document.createElement('li');
         li.className = 'transfer-item';
-        li.textContent = item;
+        // Flex layout for item content
+        li.style.display = 'flex';
+        li.style.justifyContent = 'space-between';
+        li.style.alignItems = 'center';
 
-        li.onclick = () => li.classList.toggle('selected');
+        const span = document.createElement('span');
+        span.textContent = item;
+        li.appendChild(span);
+
+        // Gear icon for PCA numeric vars
+        if (state.analysisType === 'pca' && listKey === 'pcaSelectedVars') {
+            const btnConfig = document.createElement('span');
+            btnConfig.innerHTML = '⚙️';
+            btnConfig.title = '配置正向化/区间';
+            btnConfig.style.cursor = 'pointer';
+            btnConfig.style.fontSize = '1.1rem';
+            btnConfig.style.opacity = '0.7';
+            btnConfig.style.padding = '0 4px';
+
+            btnConfig.onmouseover = () => btnConfig.style.opacity = '1';
+            btnConfig.onmouseout = () => btnConfig.style.opacity = '0.7';
+
+            btnConfig.onclick = (e) => {
+                e.stopPropagation(); // Prevent selection
+                openConfigModal(item);
+            };
+            li.appendChild(btnConfig);
+        }
+
+        li.onclick = (e) => {
+            if (e.target !== li && e.target !== span) return; // Prevent triggering when clicking gear
+            li.classList.toggle('selected');
+        };
         li.ondblclick = () => removeItem(item, listKey);
 
         ul.appendChild(li);
@@ -568,6 +601,69 @@ function initClusterControls() {
     });
 }
 
+// ===== Config Modal (Normalization) =====
+function initConfigModal() {
+    const modal = document.getElementById('config-modal');
+    const typeSelect = document.getElementById('config-type');
+    const intervalParams = document.getElementById('config-interval-params');
+
+    document.getElementById('close-config-modal').onclick = () => modal.classList.remove('active');
+    document.getElementById('cancel-config-btn').onclick = () => modal.classList.remove('active');
+
+    typeSelect.onchange = () => {
+        intervalParams.hidden = typeSelect.value !== 'interval';
+    };
+
+    document.getElementById('save-config-btn').onclick = () => {
+        const col = modal.dataset.currentItem;
+        if (!col) return;
+
+        const type = typeSelect.value;
+        const config = { type };
+
+        if (type === 'interval') {
+            const a = parseFloat(document.getElementById('config-a').value);
+            const b = parseFloat(document.getElementById('config-b').value);
+            if (isNaN(a) || isNaN(b)) {
+                return showToast('请输入有效的区间边界', 'error');
+            }
+            config.a = a;
+            config.b = b;
+        }
+
+        state.targetConfigs[col] = config;
+        modal.classList.remove('active');
+        showToast(`已保存变量配置: ${col}`, 'success');
+    };
+}
+
+function openConfigModal(col) {
+    const modal = document.getElementById('config-modal');
+    const title = document.getElementById('config-modal-title');
+    const typeSelect = document.getElementById('config-type');
+    const intervalParams = document.getElementById('config-interval-params');
+    const inputA = document.getElementById('config-a');
+    const inputB = document.getElementById('config-b');
+
+    modal.dataset.currentItem = col;
+    title.textContent = `变量配置: ${col}`;
+
+    // Load existing config
+    const config = state.targetConfigs[col] || { type: 'benefit' };
+    typeSelect.value = config.type;
+    intervalParams.hidden = config.type !== 'interval';
+
+    if (config.type === 'interval') {
+        inputA.value = config.a !== undefined ? config.a : '';
+        inputB.value = config.b !== undefined ? config.b : '';
+    } else {
+        inputA.value = '';
+        inputB.value = '';
+    }
+
+    modal.classList.add('active');
+}
+
 // ===== Analysis Logic =====
 function initAnalysis() {
     dom.btnAnalyze.addEventListener('click', runAnalysis);
@@ -592,6 +688,7 @@ async function runAnalysis() {
         }
         payload.targets = state.pcaSelectedVars;
         payload.group_by = state.pcaGroupVars || [];
+        payload.target_configs = state.targetConfigs;
         endpoint = '/api/analyze_pca';
     } else if (type === 'cluster') {
         if (state.targets.length < 1) {

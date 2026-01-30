@@ -320,7 +320,44 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=32"></script>
+    <!-- Config Modal (for Normalization) -->
+    <div class="modal-overlay" id="config-modal">
+        <div class="modal modal-sm">
+            <div class="modal-header">
+                <h3 id="config-modal-title">变量配置</h3>
+                <button class="close-btn" id="close-config-modal">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>指标类型 (正向化)</label>
+                    <select id="config-type" class="form-select">
+                        <option value="benefit">极大型 (效益型) - 默认</option>
+                        <option value="cost">极小型 (成本型)</option>
+                        <option value="interval">区间型</option>
+                    </select>
+                </div>
+                <div id="config-interval-params" hidden>
+                    <div class="form-row">
+                        <div class="form-group col">
+                            <label>下限 (a)</label>
+                            <input type="number" id="config-a" class="form-input" step="any">
+                        </div>
+                        <div class="form-group col">
+                            <label>上限 (b)</label>
+                            <input type="number" id="config-b" class="form-input" step="any">
+                        </div>
+                    </div>
+                    <p class="text-muted small mt-1">最佳区间: [a, b]</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-outline" id="cancel-config-btn">取消</button>
+                <button class="btn-primary" id="save-config-btn">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js?v=33"></script>
     <script>
         // 监听页面关闭事件，关闭后端服务
         // 注意：这会导致刷新页面时服务也会关闭。
