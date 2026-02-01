@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="多因子方差分析、PCA、聚类分析工具">
     <title>数据分析工具 Pro</title>
-    <link rel="stylesheet" href="/static/style.css?v=30">
+    <link rel="stylesheet" href="/static/style.css?v=34">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -89,6 +89,16 @@
                                 <div class="method-info">
                                     <span class="method-name">聚类分析</span>
                                     <span class="method-desc">K-Means / 层次</span>
+                                </div>
+                            </div>
+                        </label>
+                        <label class="method-card">
+                            <input type="radio" name="analysis-type" value="heatmap">
+                            <div class="card-content">
+                                <span class="method-icon">🔥</span>
+                                <div class="method-info">
+                                    <span class="method-name">相关性热图</span>
+                                    <span class="method-desc">Correlation Heatmap</span>
                                 </div>
                             </div>
                         </label>
@@ -264,6 +274,28 @@
                     </div>
                 </div>
             </div>
+
+            <!-- 热图分析区 (Heatmap Section) -->
+            <div id="heatmap-section" class="content-section" hidden>
+                <h2>相关性热图分析</h2>
+
+                <!-- Result Area -->
+                <div id="heatmap-result">
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">热图预览</h5>
+                            <div class="btn-group">
+                                <button class="btn btn-outline-secondary btn-download-heatmap" data-format="png">下载高清 PNG (600 DPI)</button>
+                                <button class="btn btn-outline-secondary btn-download-heatmap" data-format="pdf">下载 PDF (矢量)</button>
+                                <button class="btn btn-outline-secondary btn-download-heatmap" data-format="svg">下载 SVG (矢量)</button>
+                            </div>
+                        </div>
+                        <div class="card-body text-center">
+                            <img id="heatmap-preview" class="img-fluid" src="" alt="热图预览" style="max-height: 600px;">
+                        </div>
+                    </div>
+                </div>
+            </div>
         </main>
     </div>
 
@@ -357,7 +389,7 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=33"></script>
+    <script src="/static/app.js?v=34"></script>
     <script>
         // 监听页面关闭事件，关闭后端服务
         // 注意：这会导致刷新页面时服务也会关闭。

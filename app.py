@@ -23,6 +23,7 @@ import statsmodels.api as sm
 from statsmodels.formula.api import ols
 from scipy.stats import t, pearsonr
 import itertools
+import base64
 from io import BytesIO
 
 # PCA 分析
@@ -46,6 +47,13 @@ try:
     HAS_CLUSTER_MODULE = True
 except ImportError:
     HAS_CLUSTER_MODULE = False
+
+# 导入 Heatmap 模块
+try:
+    from modules.heatmap import generate_heatmap_image
+    HAS_HEATMAP_MODULE = True
+except ImportError:
+    HAS_HEATMAP_MODULE = False
 
 # tkinter 仅用于本地运行时的目录选择对话框，云端部署时不可用
 try:
@@ -1601,6 +1609,91 @@ def get_cluster_subsets():
         'available': True,
         'subsets': subsets
     })
+
+
+@app.route('/api/analyze_heatmap', methods=['POST'])
+def analyze_heatmap():
+    """生成热图预览"""
+    if not HAS_HEATMAP_MODULE:
+        return jsonify({'error': '热图模块未安装'}), 500
+
+    data = request.json
+    data_id = data.get('data_id')
+    x_vars = data.get('x_vars', [])
+    y_vars = data.get('y_vars', [])
+
+    if not data_id or data_id not in data_store:
+        return jsonify({'error': '数据已过期，请重新上传文件'}), 400
+
+    if not x_vars or not y_vars:
+        return jsonify({'error': '请选择行变量(X轴)和列变量(Y轴)'}), 400
+
+    try:
+        df = data_store[data_id]
+
+        # 生成图片 (Base64)
+        # 预览模式使用较低 DPI
+        img_bytes_io = generate_heatmap_image(df, x_vars, y_vars, format='png', dpi=100)
+        img_data = img_bytes_io.getvalue()
+        img_base64 = base64.b64encode(img_data).decode('utf-8')
+
+        return jsonify({
+            'success': True,
+            'image': img_base64
+        })
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': f'热图生成失败: {str(e)}'}), 500
+
+
+@app.route('/api/export_heatmap_image', methods=['POST'])
+def export_heatmap_image():
+    """导出热图图片"""
+    if not HAS_HEATMAP_MODULE:
+        return jsonify({'error': '热图模块未安装'}), 500
+
+    data = request.json
+    data_id = data.get('data_id')
+    x_vars = data.get('x_vars', [])
+    y_vars = data.get('y_vars', [])
+    fmt = data.get('format', 'png')
+    dpi = int(data.get('dpi', 600))
+
+    if not data_id or data_id not in data_store:
+        return jsonify({'error': '数据已过期，请重新上传文件'}), 400
+
+    if not x_vars or not y_vars:
+        return jsonify({'error': '请选择行变量(X轴)和列变量(Y轴)'}), 400
+
+    try:
+        df = data_store[data_id]
+
+        # 生成图片 (BytesIO)
+        img_bytes = generate_heatmap_image(df, x_vars, y_vars, format=fmt, dpi=dpi)
+
+        # 确定 MIME 类型
+        mimetype_map = {
+            'png': 'image/png',
+            'pdf': 'application/pdf',
+            'svg': 'image/svg+xml',
+            'jpg': 'image/jpeg',
+            'jpeg': 'image/jpeg'
+        }
+        mimetype = mimetype_map.get(fmt, 'application/octet-stream')
+
+        filename = f'heatmap_{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.{fmt}'
+
+        return send_file(
+            img_bytes,
+            mimetype=mimetype,
+            as_attachment=True,
+            download_name=filename
+        )
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': f'热图导出失败: {str(e)}'}), 500
 
 
 @app.route('/api/shutdown', methods=['POST'])

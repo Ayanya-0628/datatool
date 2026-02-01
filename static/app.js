@@ -26,6 +26,10 @@ const state = {
         useMeans: false
     },
 
+    // Heatmap Config
+    heatmapX: [],
+    heatmapY: [],
+
     results: null
 };
 
@@ -34,7 +38,9 @@ let tempState = {
     factors: [],
     targets: [],
     pcaSelectedVars: [],
-    pcaGroupVar: ''
+    pcaGroupVars: '',
+    heatmapX: [],
+    heatmapY: []
 };
 
 // ===== DOM Elements =====
@@ -97,7 +103,16 @@ const dom = {
     closeModal: document.getElementById('close-modal'),
 
     // Toast
-    toast: document.getElementById('toast')
+    toast: document.getElementById('toast'),
+
+    // Heatmap Elements
+    heatmapSection: document.getElementById('heatmap-section'),
+    heatmapXVars: document.getElementById('heatmap-x-vars'),
+    heatmapYVars: document.getElementById('heatmap-y-vars'),
+    btnAnalyzeHeatmap: document.getElementById('btn-analyze-heatmap'),
+    heatmapResult: document.getElementById('heatmap-result'),
+    heatmapPreview: document.getElementById('heatmap-preview'),
+    btnDownloadHeatmap: document.querySelectorAll('.btn-download-heatmap')
 };
 
 // ===== Initialization =====
@@ -108,6 +123,7 @@ function init() {
     initClusterControls();
     initConfigModal();
     initAnalysis();
+    initHeatmap();
     initExport();
     initTabs();
     initSheetModal();
@@ -194,6 +210,7 @@ function loadDataSuccess(data, filename) {
 
     updateUIForMethod();
     updateSidebarSummary();
+    // populateHeatmapSelectors(); // Removed in favor of modal selection
 
     showToast('数据加载成功', 'success');
 }
@@ -239,6 +256,23 @@ function updateUIForMethod() {
         dom.clusterParams.hidden = true;
     }
 
+    // Heatmap Section Visibility
+    if (type === 'heatmap') {
+        // Hide old heatmap section (selectors) as we move to modal workflow
+        if (dom.heatmapSection) dom.heatmapSection.hidden = true;
+
+        // Show standard sections
+        dom.variableSection.hidden = false;
+        dom.actionSection.hidden = false;
+        dom.resultSection.hidden = true;
+        if (dom.heatmapResult) dom.heatmapResult.hidden = true;
+    } else {
+        if (dom.heatmapSection) dom.heatmapSection.hidden = true;
+        dom.variableSection.hidden = false;
+        dom.actionSection.hidden = false;
+        // Result section visibility depends on if we have results, but usually handled by runAnalysis
+    }
+
     updateSidebarSummary();
 }
 
@@ -264,6 +298,11 @@ function updateSidebarSummary() {
         targetLabel = '特征';
         factorCount = state.factors.length;
         targetCount = state.targets.length;
+    } else if (type === 'heatmap') {
+         factorLabel = 'X轴';
+         targetLabel = 'Y轴';
+         factorCount = state.heatmapX ? state.heatmapX.length : 0;
+         targetCount = state.heatmapY ? state.heatmapY.length : 0;
     }
 
     dom.summaryFactors.parentNode.innerHTML = `
@@ -295,7 +334,9 @@ function openVariableModal() {
         factors: [...state.factors],
         targets: [...state.targets],
         pcaSelectedVars: [...state.pcaSelectedVars],
-        pcaGroupVars: state.pcaGroupVars ? [...state.pcaGroupVars] : []
+        pcaGroupVars: state.pcaGroupVars ? [...state.pcaGroupVars] : [],
+        heatmapX: state.heatmapX ? [...state.heatmapX] : [],
+        heatmapY: state.heatmapY ? [...state.heatmapY] : []
     };
 
     lastSelectedIndex = -1; // Reset selection index
@@ -304,7 +345,8 @@ function openVariableModal() {
     const typeMap = {
         'anova': '方差分析 - 变量选择',
         'pca': 'PCA - 变量选择',
-        'cluster': '聚类分析 - 变量选择'
+        'cluster': '聚类分析 - 变量选择',
+        'heatmap': '相关性热图 - 变量选择'
     };
     dom.variableModalTitle.textContent = typeMap[state.analysisType];
 
@@ -326,6 +368,8 @@ function confirmVariableChanges() {
     state.targets = [...tempState.targets];
     state.pcaSelectedVars = [...tempState.pcaSelectedVars];
     state.pcaGroupVars = [...tempState.pcaGroupVars];
+    if (tempState.heatmapX) state.heatmapX = [...tempState.heatmapX];
+    if (tempState.heatmapY) state.heatmapY = [...tempState.heatmapY];
 
     updateSidebarSummary();
     closeVariableModal();
@@ -350,6 +394,8 @@ function renderSourceList(filterText = '') {
         usedVars = new Set([...tempState.factors, ...tempState.targets]);
     } else if (state.analysisType === 'pca') {
         usedVars = new Set([...tempState.pcaSelectedVars, ...tempState.pcaGroupVars]);
+    } else if (state.analysisType === 'heatmap') {
+        usedVars = new Set([...tempState.heatmapX, ...tempState.heatmapY]);
     }
 
     const availableCols = state.columns.filter(col =>
@@ -422,12 +468,16 @@ function renderMiddleActions() {
         createActionBtn('添加性状 >', 'btn-success', () => moveItemsTo('targets', true)); // true = numeric only
         createActionBtn('< 移除', 'btn-outline', () => removeSelectedItems());
     } else if (type === 'pca') {
-        createActionBtn('添加变量 >', 'btn-success', () => moveItemsTo('pcaSelectedVars', true));
         createActionBtn('添加分组 >', 'btn-primary', () => moveItemsTo('pcaGroupVars'));
+        createActionBtn('添加变量 >', 'btn-success', () => moveItemsTo('pcaSelectedVars', true));
         createActionBtn('< 移除', 'btn-outline', () => removeSelectedItems());
     } else if (type === 'cluster') {
-        createActionBtn('添加特征 >', 'btn-success', () => moveItemsTo('targets', true)); // Features
         createActionBtn('添加标签 >', 'btn-primary', () => moveItemsTo('factors')); // Labels
+        createActionBtn('添加特征 >', 'btn-success', () => moveItemsTo('targets', true)); // Features
+        createActionBtn('< 移除', 'btn-outline', () => removeSelectedItems());
+    } else if (type === 'heatmap') {
+        createActionBtn('添加 X 轴 >', 'btn-primary', () => moveItemsTo('heatmapX', true));
+        createActionBtn('添加 Y 轴 >', 'btn-success', () => moveItemsTo('heatmapY', true));
         createActionBtn('< 移除', 'btn-outline', () => removeSelectedItems());
     }
 }
@@ -458,6 +508,9 @@ function renderTargetPanels() {
     } else if (type === 'cluster') {
         createTargetListPanel('聚类特征 (Features)', tempState.targets, 'targets');
         createTargetListPanel('样本标签 (Labels)', tempState.factors, 'factors');
+    } else if (type === 'heatmap') {
+        createTargetListPanel('X 轴变量 (Numeric)', tempState.heatmapX, 'heatmapX');
+        createTargetListPanel('Y 轴变量 (Numeric)', tempState.heatmapY, 'heatmapY');
     }
 }
 
@@ -534,6 +587,9 @@ function handleSourceDoubleClick(col) {
     } else if (type === 'cluster') {
         if (isNum) moveItemDirect(col, 'targets'); // Feature
         else moveItemDirect(col, 'factors'); // Label
+    } else if (type === 'heatmap') {
+        // Default to X axis for double click, but only if numeric
+        if (isNum) moveItemDirect(col, 'heatmapX');
     }
 }
 
@@ -700,11 +756,19 @@ async function runAnalysis() {
         payload.n_clusters = state.clusterParams.k;
         payload.use_means = state.clusterParams.useMeans;
         endpoint = '/api/analyze_cluster';
+    } else if (type === 'heatmap') {
+        if (!state.heatmapX.length || !state.heatmapY.length) {
+            return showToast('请至少选择一个 X 轴变量和一个 Y 轴变量', 'error');
+        }
+        payload.x_vars = state.heatmapX;
+        payload.y_vars = state.heatmapY;
+        endpoint = '/api/analyze_heatmap';
     }
 
     // UI State
     dom.loadingSection.hidden = false;
     dom.resultSection.hidden = true;
+    if (dom.heatmapResult) dom.heatmapResult.hidden = true;
     dom.emptyState.hidden = true;
 
     try {
@@ -719,11 +783,19 @@ async function runAnalysis() {
         if (data.error) throw new Error(data.error);
 
         state.results = data;
-        renderResults(data, type);
+
+        if (type === 'heatmap') {
+            dom.heatmapPreview.src = `data:image/png;base64,${data.image}`;
+            if (dom.heatmapResult) dom.heatmapResult.hidden = false;
+            // Ensure heatmap section (container) is visible if hidden by default
+            if (dom.heatmapSection) dom.heatmapSection.hidden = false;
+        } else {
+            renderResults(data, type);
+            dom.resultSection.hidden = false;
+            if (dom.heatmapResult) dom.heatmapResult.hidden = true;
+        }
 
         dom.loadingSection.hidden = true;
-        dom.resultSection.hidden = false;
-
         showToast('分析完成', 'success');
 
     } catch (err) {
@@ -1145,6 +1217,65 @@ async function doExport(endpoint, payload) {
             URL.revokeObjectURL(url);
             showToast('导出成功', 'success');
         }
+    } catch (err) {
+        showToast('导出失败: ' + err.message, 'error');
+    }
+}
+
+// ===== Heatmap Logic =====
+function initHeatmap() {
+    // Legacy button listener removed as we use main analyze button now
+    // if (dom.btnAnalyzeHeatmap) {
+    //     dom.btnAnalyzeHeatmap.addEventListener('click', runHeatmapAnalysis);
+    // }
+
+    if (dom.btnDownloadHeatmap) {
+        dom.btnDownloadHeatmap.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const format = e.target.dataset.format || 'png';
+                downloadHeatmap(format);
+            });
+        });
+    }
+}
+
+// populateHeatmapSelectors removed
+
+// runHeatmapAnalysis removed
+
+async function downloadHeatmap(format) {
+    const xOptions = state.heatmapX;
+    const yOptions = state.heatmapY;
+
+    if (!xOptions || xOptions.length === 0 || !yOptions || yOptions.length === 0) {
+        return showToast('请先进行热图分析配置', 'warning');
+    }
+
+    showToast('正在导出热图...', 'info');
+
+    try {
+        const res = await fetch('/api/export_heatmap_image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                data_id: state.dataId,
+                x_vars: xOptions,
+                y_vars: yOptions,
+                format: format
+            })
+        });
+
+        if (!res.ok) throw new Error('Export failed');
+
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `correlation_heatmap.${format}`;
+        a.click();
+        URL.revokeObjectURL(url);
+
+        showToast('导出成功', 'success');
     } catch (err) {
         showToast('导出失败: ' + err.message, 'error');
     }
