@@ -1,36 +1,31 @@
 :root {
-    /* 主色调 - Indigo/Violet */
-    --primary: #6366f1;
-    --primary-hover: #4f46e5;
-    --primary-light: #e0e7ff;
-    --primary-bg: #eef2ff;
+    --primary: #0f6fff;
+    --primary-hover: #005be2;
+    --primary-light: #d7e7ff;
+    --primary-bg: #eef5ff;
 
-    /* 功能色 */
-    --success: #10b981;
+    --success: #0f9f5f;
     --warning: #f59e0b;
-    --danger: #ef4444;
-    --info: #3b82f6;
+    --danger: #d63d56;
+    --info: #1b78f2;
 
-    /* 中性色 */
-    --bg-body: #f8fafc;
+    --bg-body: #eef3fb;
     --bg-surface: #ffffff;
-    --bg-sidebar: #ffffff;
-    --border: #e2e8f0;
-    --text-main: #0f172a;
-    --text-muted: #64748b;
-    --text-light: #94a3b8;
+    --bg-sidebar: #f6f9ff;
+    --border: #d6e1f1;
+    --text-main: #13233d;
+    --text-muted: #5d7090;
+    --text-light: #8ca0bc;
 
-    /* 尺寸 */
-    --sidebar-width: 320px;
-    --header-height: 64px;
-    --radius-sm: 6px;
-    --radius-md: 8px;
-    --radius-lg: 12px;
+    --sidebar-width: 336px;
+    --header-height: 72px;
+    --radius-sm: 8px;
+    --radius-md: 14px;
+    --radius-lg: 20px;
 
-    /* 阴影 */
-    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+    --shadow-sm: 0 3px 8px rgb(19 35 61 / 0.08);
+    --shadow-md: 0 10px 30px rgb(19 35 61 / 0.12);
+    --shadow-lg: 0 24px 54px rgb(19 35 61 / 0.16);
 }
 
 * {
@@ -40,83 +35,120 @@
 }
 
 body {
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
-    background-color: var(--bg-body);
+    font-family: 'DM Sans', 'Noto Sans SC', system-ui, -apple-system, sans-serif;
+    background:
+        radial-gradient(circle at 0% 0%, #d9e7ff 0%, transparent 42%),
+        radial-gradient(circle at 100% 100%, #d2e3ff 0%, transparent 38%),
+        var(--bg-body);
     color: var(--text-main);
     height: 100vh;
-    overflow: hidden; /* 防止整个页面滚动，内容区独立滚动 */
+    overflow: hidden;
 }
 
-/* ===== 布局 ===== */
 .app-container {
     display: flex;
     height: 100vh;
     width: 100vw;
+    gap: 14px;
+    padding: 14px;
 }
 
-/* 侧边栏 */
 .settings-sidebar {
     width: var(--sidebar-width);
-    background: var(--bg-sidebar);
-    border-right: 1px solid var(--border);
+    background: linear-gradient(165deg, #fbfdff 0%, var(--bg-sidebar) 64%, #edf4ff 100%);
+    border: 1px solid var(--border);
+    border-radius: 24px;
     display: flex;
     flex-direction: column;
     flex-shrink: 0;
     z-index: 10;
+    box-shadow: var(--shadow-md);
+    overflow: hidden;
 }
 
 .sidebar-header {
-    height: var(--header-height);
+    min-height: var(--header-height);
     display: flex;
     align-items: center;
-    padding: 0 24px;
+    padding: 14px 20px;
     border-bottom: 1px solid var(--border);
+    background: linear-gradient(110deg, #0f6fff 0%, #2a87ff 55%, #6daeff 100%);
 }
 
 .app-brand {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     font-weight: 700;
-    font-size: 1.1rem;
-    color: var(--text-main);
+    font-size: 1.02rem;
+    color: #ffffff;
+    letter-spacing: 0.01em;
 }
 
 .logo-icon {
-    font-size: 1.5rem;
+    font-size: 1.3rem;
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    background: rgb(255 255 255 / 0.22);
+    border: 1px solid rgb(255 255 255 / 0.42);
 }
 
 .version-badge {
-    background: var(--primary-light);
-    color: var(--primary);
-    font-size: 0.7rem;
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-weight: 600;
+    background: rgb(255 255 255 / 0.2);
+    color: #ffffff;
+    font-size: 0.67rem;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-weight: 700;
+    border: 1px solid rgb(255 255 255 / 0.35);
 }
 
 .sidebar-content {
     flex: 1;
     overflow-y: auto;
-    padding: 24px;
+    padding: 18px;
     display: flex;
     flex-direction: column;
-    gap: 32px;
+    gap: 18px;
+}
+
+.sidebar-content::-webkit-scrollbar {
+    width: 8px;
+}
+
+.sidebar-content::-webkit-scrollbar-thumb {
+    background: #c8d6eb;
+    border-radius: 999px;
+}
+
+.sidebar-section {
+    background: #ffffff;
+    border: 1px solid #e3ecf8;
+    border-radius: 16px;
+    padding: 14px;
+    box-shadow: inset 0 1px 0 #ffffff, 0 4px 14px rgb(19 35 61 / 0.05);
 }
 
 .sidebar-footer {
-    padding: 16px 24px;
+    padding: 14px 18px 18px;
     border-top: 1px solid var(--border);
-    background: var(--bg-surface);
+    background: rgb(248 251 255 / 0.92);
 }
 
-/* 主内容区 */
 .main-content {
     flex: 1;
     overflow-y: auto;
-    padding: 32px;
+    padding: 28px;
     position: relative;
-    background: var(--bg-body);
+    background:
+        linear-gradient(140deg, #fafdff 0%, #f1f6ff 100%);
+    border: 1px solid #dbe6f4;
+    border-radius: 24px;
+    box-shadow: var(--shadow-md);
 }
 
 /* ===== 组件样式 ===== */
