@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>学术分析仪表盘主视图</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              colors: {
+                "primary": "#137fec",
+                "background-light": "#f6f7f8",
+                "background-dark": "#101922",
+              },
+              fontFamily: {
+                "display": ["Inter", "sans-serif"]
+              },
+              borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+            },
+          },
+        }
+      </script>
+<style>::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8; 
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 antialiased overflow-hidden">
+<div class="flex h-screen w-full overflow-hidden">
+<aside class="flex w-80 flex-col border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 overflow-y-auto">
+<div class="flex flex-col p-4 border-b border-slate-200 dark:border-slate-800">
+<div class="flex items-center gap-2 mb-1">
+<div class="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white">
+<span class="material-symbols-outlined text-xl">analytics</span>
+</div>
+<h1 class="text-slate-900 dark:text-white text-lg font-bold leading-normal">AcademicStats</h1>
+</div>
+<p class="text-slate-500 dark:text-slate-400 text-xs font-normal pl-10">v2.4.1 专业版</p>
+</div>
+<div class="px-4 pt-6 pb-2">
+<h2 class="text-slate-900 dark:text-white text-xl font-bold leading-tight">配置面板</h2>
+<p class="text-slate-500 dark:text-slate-400 text-sm mt-1">选择数据和分析方法</p>
+</div>
+<div class="flex flex-col px-4 py-4">
+<div class="flex flex-col items-center gap-4 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 px-4 py-8 transition-colors hover:border-primary/50 hover:bg-primary/5 cursor-pointer group">
+<div class="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 group-hover:text-primary group-hover:bg-white transition-colors">
+<span class="material-symbols-outlined text-3xl">cloud_upload</span>
+</div>
+<div class="flex flex-col items-center gap-1 text-center">
+<p class="text-slate-900 dark:text-white text-sm font-bold">上传数据集</p>
+<p class="text-slate-500 dark:text-slate-400 text-xs">拖放 CSV 或 Excel 文件</p>
+</div>
+</div>
+</div>
+<div class="px-4 pb-4">
+<div class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800 p-3 shadow-sm">
+<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400">
+<span class="material-symbols-outlined">csv</span>
+</div>
+<div class="flex grow flex-col overflow-hidden">
+<p class="text-slate-900 dark:text-white text-sm font-medium truncate">data_results.csv</p>
+<p class="text-slate-500 dark:text-slate-400 text-xs truncate">850 行 • 1.2 MB</p>
+</div>
+<button class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+<span class="material-symbols-outlined text-lg">delete</span>
+</button>
+</div>
+</div>
+<div class="flex flex-col gap-3 px-4 py-2">
+<p class="text-slate-900 dark:text-white text-sm font-bold">分析方法</p>
+<label class="group flex cursor-pointer items-center gap-3 rounded-lg border border-primary bg-primary/5 dark:bg-primary/10 p-3 transition-all">
+<div class="relative flex h-5 w-5 items-center justify-center rounded-full border-2 border-primary bg-white dark:bg-slate-900">
+<div class="h-2.5 w-2.5 rounded-full bg-primary"></div>
+</div>
+<div class="flex grow flex-col">
+<span class="text-slate-900 dark:text-white text-sm font-medium">ANOVA (方差分析)</span>
+</div>
+</label>
+<label class="group flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-800 p-3 hover:border-slate-300 dark:hover:border-slate-700 transition-all">
+<div class="h-5 w-5 rounded-full border-2 border-slate-300 dark:border-slate-600 group-hover:border-slate-400"></div>
+<div class="flex grow flex-col">
+<span class="text-slate-700 dark:text-slate-300 text-sm font-medium">PCA (主成分分析)</span>
+</div>
+</label>
+<label class="group flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-800 p-3 hover:border-slate-300 dark:hover:border-slate-700 transition-all">
+<div class="h-5 w-5 rounded-full border-2 border-slate-300 dark:border-slate-600 group-hover:border-slate-400"></div>
+<div class="flex grow flex-col">
+<span class="text-slate-700 dark:text-slate-300 text-sm font-medium">Clustering (K-Means 聚类)</span>
+</div>
+</label>
+<label class="group flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-800 p-3 hover:border-slate-300 dark:hover:border-slate-700 transition-all">
+<div class="h-5 w-5 rounded-full border-2 border-slate-300 dark:border-slate-600 group-hover:border-slate-400"></div>
+<div class="flex grow flex-col">
+<span class="text-slate-700 dark:text-slate-300 text-sm font-medium">Heatmap Visualization (热力图)</span>
+</div>
+</label>
+</div>
+<div class="mt-auto p-4 border-t border-slate-200 dark:border-slate-800">
+<button class="flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-white shadow-sm hover:bg-blue-600 active:scale-[0.98] transition-all">
+<span class="material-symbols-outlined text-xl">tune</span>
+<span class="text-sm font-bold">配置变量</span>
+</button>
+</div>
+</aside>
+<main class="flex flex-1 flex-col h-full min-w-0 bg-background-light dark:bg-background-dark overflow-hidden">
+<header class="flex h-16 shrink-0 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-6">
+<div class="flex items-center gap-4">
+<h2 class="text-lg font-bold text-slate-900 dark:text-white">分析结果</h2>
+<div class="hidden h-6 w-px bg-slate-200 dark:bg-slate-700 sm:block"></div>
+<div class="hidden items-center gap-2 rounded-lg bg-slate-100 dark:bg-slate-800 px-3 py-1.5 sm:flex">
+<span class="material-symbols-outlined text-slate-400 text-lg">folder_open</span>
+<input class="w-64 bg-transparent border-none p-0 text-xs font-medium text-slate-600 dark:text-slate-300 focus:ring-0 placeholder-slate-400" readonly="" type="text" value="C:/Users/Researcher/Documents/Analysis/Q3_Study"/>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<button class="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+<span class="material-symbols-outlined text-lg text-green-600">file_save</span>
+                        导出为 Excel
+                    </button>
+<div class="h-8 w-8 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden" data-alt="用户头像">
+<img alt="用户资料" class="h-full w-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAfpIQrUE6Ry6H75p4oi3LxlDM61ILammqktHTXalTAAfuqqTxoLToXPhoMe_RsoKe_FNBVtw4c3br4W8V2CNRQcVIWV3BWYcLjo9SJSZtfFJT_NKgWx7AtANGcLqqesAdf7u4GljjJjvhq0s99JcNtUI_PH0_clbHxoPct5Naeq9gjXpBwDoC-EHfVjT5QzeHJRGAkP-syUJL2TC_iak_9jqbp-UwHBEqz9Xx5p4JiGAdLs7L7RTw2fd1lDWaOKQZW5wFKiht_yHw"/>
+</div>
+</div>
+</header>
+<div class="flex flex-1 flex-col overflow-y-auto p-6 gap-6">
+<div class="flex items-center border-b border-slate-200 dark:border-slate-800">
+<button class="relative px-4 py-3 text-sm font-bold text-primary">
+                        主效应
+                        <div class="absolute bottom-0 left-0 h-0.5 w-full bg-primary"></div>
+</button>
+<button class="px-4 py-3 text-sm font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">
+                        显著性表
+                    </button>
+<button class="px-4 py-3 text-sm font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">
+                        碎石图
+                    </button>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full min-h-[600px]">
+<div class="flex flex-col rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm lg:col-span-1 h-full overflow-hidden">
+<div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 px-4 py-3 bg-slate-50/50 dark:bg-slate-800/30">
+<h3 class="text-sm font-bold text-slate-900 dark:text-white">方差分析 (ANOVA) 结果</h3>
+<button class="text-slate-400 hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-lg">more_horiz</span>
+</button>
+</div>
+<div class="flex-1 overflow-auto p-0">
+<table class="w-full text-left text-sm text-slate-600 dark:text-slate-300">
+<thead class="text-xs uppercase text-slate-900 dark:text-white font-bold border-b-2 border-slate-900 dark:border-white">
+<tr>
+<th class="px-4 py-3" scope="col">来源</th>
+<th class="px-4 py-3 text-right" scope="col">F值</th>
+<th class="px-4 py-3 text-right" scope="col">P值</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+<tr class="bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+<td class="px-4 py-3 font-medium">处理</td>
+<td class="px-4 py-3 text-right">45.21</td>
+<td class="px-4 py-3 text-right text-green-600 font-bold">&lt; 0.001***</td>
+</tr>
+<tr class="bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+<td class="px-4 py-3 font-medium">基因型</td>
+<td class="px-4 py-3 text-right">12.84</td>
+<td class="px-4 py-3 text-right text-green-600 font-bold">0.002**</td>
+</tr>
+<tr class="bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+<td class="px-4 py-3 font-medium">交互作用</td>
+<td class="px-4 py-3 text-right">3.15</td>
+<td class="px-4 py-3 text-right">0.051</td>
+</tr>
+<tr class="bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+<td class="px-4 py-3 font-medium text-slate-400">误差</td>
+<td class="px-4 py-3 text-right text-slate-400">-</td>
+<td class="px-4 py-3 text-right text-slate-400">-</td>
+</tr>
+<tr class="bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+<td class="px-4 py-3 font-medium">区块</td>
+<td class="px-4 py-3 text-right">1.02</td>
+<td class="px-4 py-3 text-right">0.312</td>
+</tr>
+<tr class="bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+<td class="px-4 py-3 font-medium">季节</td>
+<td class="px-4 py-3 text-right">22.45</td>
+<td class="px-4 py-3 text-right text-green-600 font-bold">&lt; 0.001***</td>
+</tr>
+<tr class="bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+<td class="px-4 py-3 font-medium">时间</td>
+<td class="px-4 py-3 text-right">5.67</td>
+<td class="px-4 py-3 text-right text-green-600 font-bold">0.015*</td>
+</tr>
+</tbody>
+<tfoot class="border-t border-slate-900 dark:border-white">
+<tr>
+<td class="px-4 py-2 text-xs text-slate-500 italic" colspan="3">
+                                            显著性代码: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+                                        </td>
+</tr>
+</tfoot>
+</table>
+</div>
+</div>
+<div class="flex flex-col rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm lg:col-span-2 h-full min-h-[500px]">
+<div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 px-4 py-3 bg-slate-50/50 dark:bg-slate-800/30">
+<h3 class="text-sm font-bold text-slate-900 dark:text-white">散点图: 因子图谱</h3>
+<div class="flex items-center gap-2">
+<button class="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" title="切换 2D/3D 视图">
+<span class="material-symbols-outlined text-base">3d_rotation</span>
+                                    切换 3D
+                                </button>
+<div class="h-4 w-px bg-slate-300 dark:bg-slate-700 mx-1"></div>
+<button class="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+<span class="material-symbols-outlined text-base">zoom_in</span>
+</button>
+<button class="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+<span class="material-symbols-outlined text-base">download</span>
+                                    PNG
+                                </button>
+</div>
+</div>
+<div class="relative flex flex-1 items-center justify-center p-6 bg-slate-50 dark:bg-slate-900/50">
+<div class="absolute inset-0 m-6 border-l border-b border-slate-300 dark:border-slate-600">
+<div class="absolute bottom-0 left-0 w-full h-px bg-slate-200 dark:bg-slate-700" style="bottom: 20%"></div>
+<div class="absolute bottom-0 left-0 w-full h-px bg-slate-200 dark:bg-slate-700" style="bottom: 40%"></div>
+<div class="absolute bottom-0 left-0 w-full h-px bg-slate-200 dark:bg-slate-700" style="bottom: 60%"></div>
+<div class="absolute bottom-0 left-0 w-full h-px bg-slate-200 dark:bg-slate-700" style="bottom: 80%"></div>
+<div class="absolute bottom-0 left-0 h-full w-px bg-slate-200 dark:bg-slate-700" style="left: 20%"></div>
+<div class="absolute bottom-0 left-0 h-full w-px bg-slate-200 dark:bg-slate-700" style="left: 40%"></div>
+<div class="absolute bottom-0 left-0 h-full w-px bg-slate-200 dark:bg-slate-700" style="left: 60%"></div>
+<div class="absolute bottom-0 left-0 h-full w-px bg-slate-200 dark:bg-slate-700" style="left: 80%"></div>
+</div>
+<div class="relative w-full h-full z-10 m-6">
+<div class="absolute h-3 w-3 rounded-full bg-primary/80 border border-white shadow-sm" style="left: 25%; bottom: 35%;"></div>
+<div class="absolute h-3 w-3 rounded-full bg-primary/80 border border-white shadow-sm" style="left: 28%; bottom: 38%;"></div>
+<div class="absolute h-3 w-3 rounded-full bg-primary/80 border border-white shadow-sm" style="left: 22%; bottom: 32%;"></div>
+<div class="absolute h-3 w-3 rounded-full bg-primary/80 border border-white shadow-sm" style="left: 30%; bottom: 25%;"></div>
+<div class="absolute h-3 w-3 rounded-full bg-primary/80 border border-white shadow-sm" style="left: 26%; bottom: 30%;"></div>
+<div class="absolute h-3 w-3 rounded-full bg-red-500/80 border border-white shadow-sm" style="left: 65%; bottom: 75%;"></div>
+<div class="absolute h-3 w-3 rounded-full bg-red-500/80 border border-white shadow-sm" style="left: 68%; bottom: 78%;"></div>
+<div class="absolute h-3 w-3 rounded-full bg-red-500/80 border border-white shadow-sm" style="left: 62%; bottom: 72%;"></div>
+<div class="absolute h-3 w-3 rounded-full bg-red-500/80 border border-white shadow-sm" style="left: 70%; bottom: 65%;"></div>
+<div class="absolute h-3 w-3 rounded-full bg-red-500/80 border border-white shadow-sm" style="left: 66%; bottom: 70%;"></div>
+<div class="absolute h-3 w-3 rounded-full bg-emerald-500/80 border border-white shadow-sm" style="left: 75%; bottom: 25%;"></div>
+<div class="absolute h-3 w-3 rounded-full bg-emerald-500/80 border border-white shadow-sm" style="left: 78%; bottom: 28%;"></div>
+<div class="absolute h-3 w-3 rounded-full bg-emerald-500/80 border border-white shadow-sm" style="left: 72%; bottom: 22%;"></div>
+<div class="absolute h-3 w-3 rounded-full bg-emerald-500/80 border border-white shadow-sm" style="left: 80%; bottom: 15%;"></div>
+<div class="absolute text-xs font-bold text-primary bg-white/80 dark:bg-slate-900/80 px-1 rounded" style="left: 25%; bottom: 40%;">A 组</div>
+<div class="absolute text-xs font-bold text-red-500 bg-white/80 dark:bg-slate-900/80 px-1 rounded" style="left: 65%; bottom: 80%;">B 组</div>
+<div class="absolute text-xs font-bold text-emerald-500 bg-white/80 dark:bg-slate-900/80 px-1 rounded" style="left: 75%; bottom: 30%;">C 组</div>
+</div>
+<div class="absolute top-4 right-4 flex flex-col gap-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 p-3 shadow-lg z-20 backdrop-blur-sm">
+<div class="flex items-center gap-2">
+<div class="h-2.5 w-2.5 rounded-full bg-primary"></div>
+<span class="text-xs font-medium text-slate-700 dark:text-slate-300">对照组</span>
+</div>
+<div class="flex items-center gap-2">
+<div class="h-2.5 w-2.5 rounded-full bg-red-500"></div>
+<span class="text-xs font-medium text-slate-700 dark:text-slate-300">处理 1</span>
+</div>
+<div class="flex items-center gap-2">
+<div class="h-2.5 w-2.5 rounded-full bg-emerald-500"></div>
+<span class="text-xs font-medium text-slate-700 dark:text-slate-300">处理 2</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="flex items-center justify-between py-2 text-xs text-slate-400">
+<div>
+                        上次分析运行: 今天, 14:32 PM
+                    </div>
+<div class="flex gap-4">
+<span>模型: <span class="font-medium text-slate-600 dark:text-slate-300">一般线性模型 (GLM)</span></span>
+<span>R方 (R-Squared): <span class="font-medium text-slate-600 dark:text-slate-300">0.82</span></span>
+</div>
+</div>
+</div>
+</main>
+</div>
+
+</body></html>
