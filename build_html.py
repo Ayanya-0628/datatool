@@ -1,4 +1,6 @@
-<!DOCTYPE html>
+import sys
+def generate_html():
+    html_content = """<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="utf-8"/>
@@ -469,3 +471,9 @@
     </script>
 </body>
 </html>
+"""
+    with open('e:/AntiAPP/templates/dashboard.html', 'w', encoding='utf-8') as f:
+        f.write(html_content)
+
+if __name__ == '__main__':
+    generate_html()
