@@ -55,6 +55,20 @@ try:
 except ImportError:
     HAS_HEATMAP_MODULE = False
 
+# 导入智能数据整理模块
+try:
+    from smart_tidy import scan_excel_structure, execute_smart_tidy
+    HAS_SMART_TIDY = True
+except ImportError:
+    HAS_SMART_TIDY = False
+
+# 导入 LLM 数据整理模块（AI 万能整理）
+try:
+    from llm_tidy import analyze_and_transform
+    HAS_LLM_TIDY = True
+except ImportError:
+    HAS_LLM_TIDY = False
+
 # tkinter 仅用于本地运行时的目录选择对话框，云端部署时不可用
 try:
     import tkinter as tk
@@ -145,10 +159,18 @@ DATA_EXPIRE_SECONDS = 3600  # 数据1小时后过期
 # 暂存未确认的文件 (用于多Sheet选择)
 temp_file_store = {}
 
+# 存储原始 Excel 文件字节（智能整理需要 openpyxl 读取合并单元格）
+raw_file_store = {}  # {data_id: {'content': bytes, 'filename': str, 'sheet_name': str|None}}
+
 # 导出文件存放目录
 EXPORT_DIR = os.path.join(APP_DATA_DIR, 'exports')
 if not os.path.exists(EXPORT_DIR):
     os.makedirs(EXPORT_DIR)
+
+# 可选：启用「注册后使用」（方式三云端部署时设置 ENABLE_AUTH=1）
+if os.environ.get('ENABLE_AUTH', '').lower() in ('1', 'true', 'yes'):
+    from auth import init_auth
+    init_auth(app, APP_DATA_DIR)
 
 
 def sanitize_dataframe(df):
@@ -681,7 +703,8 @@ def analyze_column_types(df):
 
 @app.route('/')
 def index():
-    return render_template('dashboard.html')
+    auth_enabled = os.environ.get('ENABLE_AUTH', '').lower() in ('1', 'true', 'yes')
+    return render_template('dashboard.html', auth_enabled=auth_enabled)
 
 
 @app.route('/api/upload', methods=['POST'])
@@ -746,13 +769,23 @@ def upload():
         data_store[data_id] = df
         data_timestamps[data_id] = time.time()
         
+        # 保存原始 Excel 字节（智能整理需要）
+        if filename.endswith('.xlsx') or filename.endswith('.xls'):
+            raw_file_store[data_id] = {
+                'content': file_content,
+                'filename': filename,
+                'sheet_name': None
+            }
+        
         # 分析列类型
         type_analysis = analyze_column_types(df)
         
+        is_excel = filename.endswith('.xlsx') or filename.endswith('.xls')
         response_data = {
             'data_id': data_id,
             'columns': list(df.columns),
-            'rows': len(df)
+            'rows': len(df),
+            'is_excel': is_excel
         }
         response_data.update(type_analysis)
         
@@ -787,13 +820,21 @@ def load_sheet():
         data_store[data_id] = df
         data_timestamps[data_id] = time.time()
         
+        # 保存原始 Excel 字节（智能整理需要）
+        raw_file_store[data_id] = {
+            'content': file_data['content'],
+            'filename': file_data['filename'],
+            'sheet_name': sheet_name
+        }
+        
         # 分析列类型
         type_analysis = analyze_column_types(df)
         
         response_data = {
             'data_id': data_id,
             'columns': list(df.columns),
-            'rows': len(df)
+            'rows': len(df),
+            'is_excel': True
         }
         response_data.update(type_analysis)
         
@@ -1694,6 +1735,483 @@ def export_heatmap_image():
     except Exception as e:
         traceback.print_exc()
         return jsonify({'error': f'热图导出失败: {str(e)}'}), 500
+
+
+# =====================================================
+# 数据整形 (Reshape) API
+# =====================================================
+
+# 存储整形结果
+reshape_store = {}  # {data_id: DataFrame}
+
+
+@app.route('/api/reshape_preview', methods=['POST'])
+def reshape_preview():
+    """预览原始数据（前20行）"""
+    data = request.json
+    data_id = data.get('data_id')
+
+    if not data_id or data_id not in data_store:
+        return jsonify({'error': '数据已过期，请重新上传文件'}), 400
+
+    try:
+        df = data_store[data_id]
+        preview_rows = min(20, len(df))
+        preview_df = sanitize_dataframe(df.head(preview_rows))
+
+        return jsonify({
+            'columns': list(df.columns),
+            'rows': len(df),
+            'preview': preview_df.to_dict(orient='records'),
+            'preview_rows': preview_rows
+        })
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': f'预览失败: {str(e)}'}), 500
+
+
+@app.route('/api/reshape', methods=['POST'])
+def reshape():
+    """执行数据整形操作"""
+    data = request.json
+    data_id = data.get('data_id')
+    action = data.get('action')  # 'melt' or 'pivot'
+
+    if not data_id or data_id not in data_store:
+        return jsonify({'error': '数据已过期，请重新上传文件'}), 400
+
+    if action not in ('melt', 'pivot'):
+        return jsonify({'error': '不支持的操作类型'}), 400
+
+    try:
+        df = data_store[data_id].copy()
+        result_df = None
+
+        if action == 'melt':
+            # 宽表转长表
+            id_vars = data.get('id_vars', [])       # 保持不变的列
+            value_vars = data.get('value_vars', [])  # 要融化的列
+            var_name = data.get('var_name', '变量')   # 融化后的变量名列名
+            value_name = data.get('value_name', '值') # 融化后的值列名
+
+            if not id_vars:
+                return jsonify({'error': '请选择至少一个 ID 列（保持不变的列）'}), 400
+            if not value_vars:
+                return jsonify({'error': '请选择至少一个要融化的值列'}), 400
+
+            # 验证列存在
+            missing_cols = [c for c in id_vars + value_vars if c not in df.columns]
+            if missing_cols:
+                return jsonify({'error': f'列不存在: {", ".join(missing_cols)}'}), 400
+
+            result_df = pd.melt(
+                df,
+                id_vars=id_vars,
+                value_vars=value_vars,
+                var_name=var_name,
+                value_name=value_name
+            )
+
+            # 保持原始 id_vars 的出现顺序
+            for col in id_vars:
+                clean_col = result_df[col].astype(str).str.strip()
+                original_order = pd.unique(clean_col)
+                result_df[col] = pd.Categorical(clean_col, categories=original_order, ordered=True)
+            
+            # 保持 value_vars 的选择顺序
+            var_order = pd.unique([str(v) for v in value_vars])
+            result_df[var_name] = pd.Categorical(
+                result_df[var_name].astype(str),
+                categories=var_order,
+                ordered=True
+            )
+            result_df = result_df.sort_values(by=id_vars + [var_name]).reset_index(drop=True)
+            # 转回 object 类型以便序列化
+            for col in result_df.select_dtypes(include='category').columns:
+                result_df[col] = result_df[col].astype(str)
+
+        elif action == 'pivot':
+            # 长表转宽表
+            index_cols = data.get('index_cols', [])   # 行索引列
+            columns_col = data.get('columns_col', '')  # 用于展开的列
+            values_col = data.get('values_col', '')    # 值列
+            agg_func = data.get('agg_func', 'first')   # 聚合函数
+
+            if not index_cols:
+                return jsonify({'error': '请选择至少一个索引列'}), 400
+            if not columns_col:
+                return jsonify({'error': '请选择列名列（用于展开）'}), 400
+            if not values_col:
+                return jsonify({'error': '请选择值列'}), 400
+
+            # 验证列存在
+            all_cols = index_cols + [columns_col, values_col]
+            missing_cols = [c for c in all_cols if c not in df.columns]
+            if missing_cols:
+                return jsonify({'error': f'列不存在: {", ".join(missing_cols)}'}), 400
+
+            # 聚合函数映射
+            agg_map = {
+                'first': 'first',
+                'mean': 'mean',
+                'sum': 'sum',
+                'count': 'count',
+                'max': 'max',
+                'min': 'min'
+            }
+            agg = agg_map.get(agg_func, 'first')
+
+            # 保持 columns_col 的出现顺序
+            col_order = list(pd.unique(df[columns_col].astype(str).str.strip()))
+
+            # 执行 pivot
+            try:
+                result_df = df.pivot_table(
+                    index=index_cols,
+                    columns=columns_col,
+                    values=values_col,
+                    aggfunc=agg
+                )
+            except Exception as pivot_err:
+                return jsonify({'error': f'Pivot 失败: {str(pivot_err)}. 可能存在重复值，请选择适当的聚合函数。'}), 400
+
+            # 按原始顺序排列列
+            existing_cols = [c for c in col_order if c in result_df.columns]
+            result_df = result_df.reindex(columns=existing_cols)
+
+            result_df.columns.name = None  # 清除列名
+            result_df = result_df.reset_index()
+
+        # 存储结果
+        reshape_store[data_id] = result_df
+
+        # 返回预览
+        preview_rows = min(50, len(result_df))
+        preview_df = sanitize_dataframe(result_df.head(preview_rows))
+
+        return jsonify({
+            'success': True,
+            'action': action,
+            'columns': list(result_df.columns),
+            'total_rows': len(result_df),
+            'preview_rows': preview_rows,
+            'preview': preview_df.to_dict(orient='records')
+        })
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': f'整形操作失败: {str(e)}'}), 500
+
+
+@app.route('/api/export_reshape', methods=['POST'])
+def export_reshape():
+    """导出整形结果到 Excel"""
+    data = request.json
+    data_id = data.get('data_id')
+    save_dir = data.get('save_dir', '')
+
+    if not data_id or data_id not in reshape_store:
+        return jsonify({'error': '没有可导出的整形结果，请先执行转换操作'}), 400
+
+    try:
+        result_df = reshape_store[data_id]
+        clean_df = sanitize_dataframe(result_df)
+
+        # 确定保存路径
+        if save_dir and os.path.isdir(save_dir):
+            out_dir = save_dir
+        else:
+            out_dir = EXPORT_DIR
+
+        filename = f"reshape_result_{data_id[:8]}.xlsx"
+        filepath = os.path.join(out_dir, filename)
+
+        # 写入 Excel
+        with pd.ExcelWriter(filepath, engine='openpyxl') as writer:
+            clean_df.to_excel(writer, sheet_name='整形结果', index=False)
+
+            # 自动调整列宽
+            ws = writer.sheets['整形结果']
+            for col_idx, col_name in enumerate(clean_df.columns, 1):
+                max_len = max(
+                    len(str(col_name)),
+                    clean_df[col_name].astype(str).str.len().max() if len(clean_df) > 0 else 0
+                )
+                ws.column_dimensions[ws.cell(row=1, column=col_idx).column_letter].width = min(max_len + 4, 40)
+
+        @after_this_request
+        def cleanup(response):
+            try:
+                if os.path.exists(filepath) and out_dir == EXPORT_DIR:
+                    threading.Timer(60, lambda: os.remove(filepath) if os.path.exists(filepath) else None).start()
+            except:
+                pass
+            return response
+
+        return send_file(filepath, as_attachment=True, download_name=filename)
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': f'导出失败: {str(e)}'}), 500
+
+
+@app.route('/api/reshape_load_result', methods=['POST'])
+def reshape_load_result():
+    """将整形结果加载为新的数据源，可以用于后续分析"""
+    data = request.json
+    data_id = data.get('data_id')
+
+    if not data_id or data_id not in reshape_store:
+        return jsonify({'error': '没有可用的整形结果'}), 400
+
+    try:
+        result_df = reshape_store[data_id].copy()
+
+        # 使用新的 data_id 存储
+        new_data_id = str(uuid.uuid4())
+        data_store[new_data_id] = result_df
+        data_timestamps[new_data_id] = time.time()
+
+        # 分析列类型
+        type_analysis = analyze_column_types(result_df)
+
+        response_data = {
+            'data_id': new_data_id,
+            'columns': list(result_df.columns),
+            'rows': len(result_df)
+        }
+        response_data.update(type_analysis)
+
+        return jsonify(response_data)
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': f'加载失败: {str(e)}'}), 500
+
+
+# =====================================================
+# 智能数据整理 (Smart Tidy) API
+# =====================================================
+
+# 存储扫描结果（含内部数据矩阵）
+smart_tidy_store = {}  # {data_id: scan_result}
+
+
+@app.route('/api/smart_tidy_scan', methods=['POST'])
+def smart_tidy_scan():
+    """扫描 Excel 文件结构，检测合并单元格和多行表头"""
+    if not HAS_SMART_TIDY:
+        return jsonify({'error': '智能整理模块未安装'}), 500
+
+    data = request.json
+    data_id = data.get('data_id')
+
+    if not data_id or data_id not in raw_file_store:
+        return jsonify({'error': '该文件不是 Excel 格式或原始数据已过期，请重新上传 Excel 文件'}), 400
+
+    try:
+        raw_info = raw_file_store[data_id]
+        file_content = raw_info['content']
+        sheet_name = raw_info.get('sheet_name')
+
+        # 扫描文件结构
+        result = scan_excel_structure(file_content, sheet_name)
+
+        if 'error' in result:
+            return jsonify({'error': result['error']}), 400
+
+        # 存储扫描结果（包含内部数据矩阵）
+        smart_tidy_store[data_id] = result
+
+        # 返回给前端（排除内部数据）
+        response = {k: v for k, v in result.items() if not k.startswith('_')}
+        return jsonify(response)
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': f'扫描失败: {str(e)}'}), 500
+
+
+@app.route('/api/smart_tidy_execute', methods=['POST'])
+def smart_tidy_execute():
+    """执行智能整理转换"""
+    if not HAS_SMART_TIDY:
+        return jsonify({'error': '智能整理模块未安装'}), 500
+
+    data = request.json
+    data_id = data.get('data_id')
+
+    if not data_id or data_id not in smart_tidy_store:
+        return jsonify({'error': '请先执行扫描操作'}), 400
+
+    try:
+        scan_result = smart_tidy_store[data_id]
+
+        # 用户选项
+        options = {
+            'drop_avg': data.get('drop_avg', True),
+            'output_format': data.get('output_format', 'semi_long')
+        }
+
+        # 执行转换
+        result_df = execute_smart_tidy(scan_result, options)
+
+        # 存入 reshape_store（复用导出机制）
+        reshape_store[data_id] = result_df
+
+        # 返回预览
+        preview_rows = min(50, len(result_df))
+        preview_df = sanitize_dataframe(result_df.head(preview_rows))
+
+        return jsonify({
+            'success': True,
+            'columns': list(result_df.columns),
+            'total_rows': len(result_df),
+            'preview_rows': preview_rows,
+            'preview': preview_df.to_dict(orient='records')
+        })
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': f'转换失败: {str(e)}'}), 500
+
+
+# =====================================================
+# LLM 数据整理 (AI 万能整理) API
+# =====================================================
+
+@app.route('/api/llm_tidy', methods=['POST'])
+def llm_tidy():
+    """双擎整理：优先本地 SmartTidy，失败后回退到 LLM。"""
+    data = request.json or {}
+    data_id = data.get('data_id')
+    drop_avg = data.get('drop_avg', True)
+    api_key = (data.get('api_key') or '').strip()
+    model = data.get('model')
+    api_base = data.get('api_base')
+
+    if not data_id or data_id not in raw_file_store:
+        return jsonify({'error': '该文件不是 Excel 格式或数据已过期，请重新上传'}), 400
+
+    try:
+        raw_info = raw_file_store[data_id]
+        file_content = raw_info['content']
+        sheet_name = raw_info.get('sheet_name')
+        local_error = None
+
+        # 第一引擎：本地 SmartTidy（优先）
+        if HAS_SMART_TIDY:
+            try:
+                scan_result = scan_excel_structure(file_content, sheet_name)
+                sub_tables = scan_result.get('sub_tables', []) if isinstance(scan_result, dict) else []
+
+                if isinstance(scan_result, dict) and 'error' not in scan_result and sub_tables:
+                    result_df = execute_smart_tidy(
+                        scan_result,
+                        {
+                            'drop_avg': drop_avg,
+                            'output_format': 'wide'
+                        }
+                    )
+                    if isinstance(result_df, pd.DataFrame) and not result_df.empty:
+                        reshape_store[data_id] = result_df
+                        preview_rows = min(50, len(result_df))
+                        preview_df = sanitize_dataframe(result_df.head(preview_rows))
+                        tables_found = [
+                            {
+                                'name': item.get('title', ''),
+                                'rows': item.get('rows', 0),
+                                'row_range': item.get('row_range'),
+                                'location': item.get('column_range'),
+                            }
+                            for item in sub_tables
+                        ]
+
+                        return jsonify({
+                            'success': True,
+                            'engine': 'smart_tidy',
+                            'description': '已使用本地稳健解析器完成多子表解析与宽表融合',
+                            'tables_found': tables_found,
+                            'columns': list(result_df.columns),
+                            'total_rows': len(result_df),
+                            'preview_rows': preview_rows,
+                            'preview': preview_df.to_dict(orient='records')
+                        })
+
+                    local_error = '本地解析器执行完成，但结果为空'
+                else:
+                    if isinstance(scan_result, dict):
+                        local_error = scan_result.get('error', '本地解析器未检测到有效子表')
+                    else:
+                        local_error = '本地解析器返回异常结构'
+
+            except Exception as local_exc:
+                traceback.print_exc()
+                local_error = f'本地解析器异常: {str(local_exc)}'
+        else:
+            local_error = '智能整理模块未安装'
+
+        # 第二引擎：LLM 兜底
+        if not HAS_LLM_TIDY:
+            return jsonify({
+                'success': False,
+                'description': '本地解析失败，且 LLM 兜底模块不可用',
+                'tables_found': [],
+                'error': local_error or '未启用可用整理引擎'
+            }), 500
+
+        if not api_key:
+            return jsonify({
+                'success': False,
+                'description': '本地解析失败，且未提供 API Key，无法启动 LLM 兜底',
+                'tables_found': [],
+                'error': local_error or '本地解析失败'
+            }), 400
+
+        llm_result = analyze_and_transform(
+            file_content=file_content,
+            api_key=api_key,
+            sheet_name=sheet_name,
+            model=model,
+            api_base=api_base,
+            max_retries=3,
+        )
+
+        if not llm_result.get('success'):
+            return jsonify({
+                'success': False,
+                'description': llm_result.get('description', 'LLM 兜底执行失败'),
+                'tables_found': llm_result.get('tables_found', []),
+                'error': f"{local_error or '本地解析失败'}；LLM: {llm_result.get('error', '未知错误')}"
+            }), 400
+
+        result_df = llm_result.get('result_df')
+        if not isinstance(result_df, pd.DataFrame) or result_df.empty:
+            return jsonify({
+                'success': False,
+                'description': llm_result.get('description', 'LLM 兜底返回空结果'),
+                'tables_found': llm_result.get('tables_found', []),
+                'error': f"{local_error or '本地解析失败'}；LLM 未生成可用结果"
+            }), 400
+
+        reshape_store[data_id] = result_df
+        preview_rows = min(50, len(result_df))
+        preview_df = sanitize_dataframe(result_df.head(preview_rows))
+
+        return jsonify({
+            'success': True,
+            'engine': 'llm_fallback',
+            'description': llm_result.get('description') or '本地解析失败后，已由 LLM 兜底完成整理',
+            'tables_found': llm_result.get('tables_found', []),
+            'columns': list(result_df.columns),
+            'total_rows': len(result_df),
+            'preview_rows': preview_rows,
+            'preview': preview_df.to_dict(orient='records')
+        })
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': f'双擎整理失败: {str(e)}'}), 500
 
 
 @app.route('/api/shutdown', methods=['POST'])

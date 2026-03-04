@@ -1,21 +1,25 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
-    <meta charset="utf-8"/>
-    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
     <title>数据分析工具 Pro</title>
-    
+
     <!-- Old CSS -->
-    <link rel="stylesheet" href="/static/style.css?v=35">
-    
+    <link rel="stylesheet" href="/static/style.css?v=43">
+
     <!-- Google Fonts & Tailwind -->
-    <link href="https://fonts.googleapis.com" rel="preconnect"/>
-    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet"/>
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com" rel="preconnect" />
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;700&display=swap"
+        rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+        rel="stylesheet" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-    
+
     <script id="tailwind-config">
         tailwind.config = {
             darkMode: "class",
@@ -34,27 +38,64 @@
         }
     </script>
     <style>
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-        
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
         /* Overrides to prevent style.css conflicts with Tailwind Layout */
-        body { padding: 0 !important; margin: 0 !important; overflow: hidden; background: none !important; }
-        main { flex: 1; }
-        [hidden] { display: none !important; }
-        
+        body {
+            padding: 0 !important;
+            margin: 0 !important;
+            overflow: hidden;
+            background: none !important;
+        }
+
+        main {
+            flex: 1;
+        }
+
+        [hidden] {
+            display: none !important;
+        }
+
         /* Restore tabs style */
-        .tab-pane { display: none; }
-        .tab-pane.active { display: block; }
-        .drop-overlay { display: none; }
-        .drop-overlay.active { display: flex; }
+        .tab-pane {
+            display: none;
+        }
+
+        .tab-pane.active {
+            display: block;
+        }
+
+        .drop-overlay {
+            display: none;
+        }
+
+        .drop-overlay.active {
+            display: flex;
+        }
     </style>
 </head>
 
-<body class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 antialiased overflow-hidden">
+<body
+    class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 antialiased overflow-hidden">
     <!-- 全局拖拽上传遮罩 (Old ID) -->
-    <div class="drop-overlay fixed inset-0 bg-primary/90 z-[1000] flex-col justify-center items-center text-white" id="drop-overlay">
+    <div class="drop-overlay fixed inset-0 bg-primary/90 z-[1000] flex-col justify-center items-center text-white"
+        id="drop-overlay">
         <span class="material-symbols-outlined text-[64px]">cloud_upload</span>
         <span class="text-2xl mt-4 font-bold">释放文件以上传</span>
     </div>
@@ -62,7 +103,8 @@
     <!-- Main App Container Layout using Tailwind -->
     <div class="flex h-screen w-full overflow-hidden">
         <!-- SIDEBAR -->
-        <aside class="flex w-80 flex-col border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 overflow-y-auto z-10">
+        <aside
+            class="flex w-80 flex-col border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 overflow-y-auto z-10">
             <!-- Header -->
             <div class="flex flex-col p-4 border-b border-slate-200 dark:border-slate-800">
                 <div class="flex items-center gap-2 mb-1">
@@ -73,7 +115,7 @@
                 </div>
                 <p class="text-slate-500 dark:text-slate-400 text-xs font-normal pl-10">v2.4.1 专业版</p>
             </div>
-            
+
             <div class="px-4 pt-6 pb-2">
                 <h2 class="text-slate-900 dark:text-white text-xl font-bold leading-tight">配置面板</h2>
                 <p class="text-slate-500 dark:text-slate-400 text-sm mt-1">选择数据源与分析方法</p>
@@ -82,11 +124,14 @@
             <!-- 数据源区域 -->
             <div class="flex flex-col px-4 py-4">
                 <p class="text-slate-900 dark:text-white text-sm font-bold mb-2">数据源</p>
-                
+
                 <!-- 未上传状态 (#upload-panel) -->
-                <div id="upload-panel" class="flex flex-col items-center gap-4 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 px-4 py-8 transition-colors hover:border-primary/50 hover:bg-primary/5 cursor-pointer group" onclick="document.getElementById('file-input').click()">
+                <div id="upload-panel"
+                    class="flex flex-col items-center gap-4 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 px-4 py-8 transition-colors hover:border-primary/50 hover:bg-primary/5 cursor-pointer group"
+                    onclick="document.getElementById('file-input').click()">
                     <input type="file" id="file-input" accept=".csv,.xls,.xlsx" class="hidden">
-                    <div id="upload-btn" class="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 group-hover:text-primary group-hover:bg-white transition-colors">
+                    <div id="upload-btn"
+                        class="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 group-hover:text-primary group-hover:bg-white transition-colors">
                         <span class="material-symbols-outlined text-3xl">cloud_upload</span>
                     </div>
                     <div class="flex flex-col items-center gap-1 text-center">
@@ -97,15 +142,19 @@
 
                 <!-- 已上传状态 (#data-info-panel) -->
                 <div id="data-info-panel" hidden class="w-full mt-2">
-                    <div class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800 p-3 shadow-sm">
-                        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400">
+                    <div
+                        class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800 p-3 shadow-sm">
+                        <div
+                            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400">
                             <span class="material-symbols-outlined">dataset</span>
                         </div>
                         <div class="flex grow flex-col overflow-hidden">
-                            <p class="text-slate-900 dark:text-white text-sm font-medium truncate" id="file-name">filename.csv</p>
+                            <p class="text-slate-900 dark:text-white text-sm font-medium truncate" id="file-name">
+                                filename.csv</p>
                             <p class="text-slate-500 dark:text-slate-400 text-xs truncate" id="file-rows">0 行数据</p>
                         </div>
-                        <button id="clear-file" class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                        <button id="clear-file"
+                            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
                             <span class="material-symbols-outlined text-lg">delete</span>
                         </button>
                     </div>
@@ -115,55 +164,83 @@
             <!-- 分析方法 (#method-section) -->
             <div id="method-section" hidden class="flex flex-col gap-3 px-4 py-2">
                 <p class="text-slate-900 dark:text-white text-sm font-bold">分析方法</p>
-                
-                <label class="method-card group flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-800 p-3 hover:border-slate-300 dark:hover:border-slate-700 transition-all">
+
+                <label
+                    class="method-card group flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-800 p-3 hover:border-slate-300 dark:hover:border-slate-700 transition-all">
                     <input type="radio" name="analysis-type" value="anova" class="hidden peer" checked>
                     <!-- Custom Radio -->
-                    <div class="h-5 w-5 rounded-full border-2 border-slate-300 group-hover:border-slate-400 peer-checked:border-primary peer-checked:border-4 transition-all"></div>
+                    <div
+                        class="h-5 w-5 rounded-full border-2 border-slate-300 group-hover:border-slate-400 peer-checked:border-primary peer-checked:border-4 transition-all">
+                    </div>
                     <div class="flex grow flex-col">
                         <span class="text-slate-900 dark:text-white text-sm font-medium">方差分析 (ANOVA)</span>
                     </div>
                 </label>
-                
-                <label class="method-card group flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-800 p-3 hover:border-slate-300 dark:hover:border-slate-700 transition-all">
+
+                <label
+                    class="method-card group flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-800 p-3 hover:border-slate-300 dark:hover:border-slate-700 transition-all">
                     <input type="radio" name="analysis-type" value="pca" class="hidden peer">
-                    <div class="h-5 w-5 rounded-full border-2 border-slate-300 group-hover:border-slate-400 peer-checked:border-primary peer-checked:border-4 transition-all"></div>
+                    <div
+                        class="h-5 w-5 rounded-full border-2 border-slate-300 group-hover:border-slate-400 peer-checked:border-primary peer-checked:border-4 transition-all">
+                    </div>
                     <div class="flex grow flex-col">
                         <span class="text-slate-900 dark:text-white text-sm font-medium">主成分分析 (PCA)</span>
                     </div>
                 </label>
-                
-                <label class="method-card group flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-800 p-3 hover:border-slate-300 dark:hover:border-slate-700 transition-all">
+
+                <label
+                    class="method-card group flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-800 p-3 hover:border-slate-300 dark:hover:border-slate-700 transition-all">
                     <input type="radio" name="analysis-type" value="cluster" class="hidden peer">
-                    <div class="h-5 w-5 rounded-full border-2 border-slate-300 group-hover:border-slate-400 peer-checked:border-primary peer-checked:border-4 transition-all"></div>
+                    <div
+                        class="h-5 w-5 rounded-full border-2 border-slate-300 group-hover:border-slate-400 peer-checked:border-primary peer-checked:border-4 transition-all">
+                    </div>
                     <div class="flex grow flex-col">
                         <span class="text-slate-900 dark:text-white text-sm font-medium">聚类分析 (Clustering)</span>
                     </div>
                 </label>
-                
-                <label class="method-card group flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-800 p-3 hover:border-slate-300 dark:hover:border-slate-700 transition-all">
+
+                <label
+                    class="method-card group flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-800 p-3 hover:border-slate-300 dark:hover:border-slate-700 transition-all">
                     <input type="radio" name="analysis-type" value="heatmap" class="hidden peer">
-                    <div class="h-5 w-5 rounded-full border-2 border-slate-300 group-hover:border-slate-400 peer-checked:border-primary peer-checked:border-4 transition-all"></div>
+                    <div
+                        class="h-5 w-5 rounded-full border-2 border-slate-300 group-hover:border-slate-400 peer-checked:border-primary peer-checked:border-4 transition-all">
+                    </div>
                     <div class="flex grow flex-col">
                         <span class="text-slate-900 dark:text-white text-sm font-medium">热力图 (Heatmap)</span>
+                    </div>
+                </label>
+
+                <label
+                    class="method-card group flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-800 p-3 hover:border-slate-300 dark:hover:border-slate-700 transition-all">
+                    <input type="radio" name="analysis-type" value="reshape" class="hidden peer">
+                    <div
+                        class="h-5 w-5 rounded-full border-2 border-slate-300 group-hover:border-slate-400 peer-checked:border-primary peer-checked:border-4 transition-all">
+                    </div>
+                    <div class="flex grow flex-col">
+                        <span class="text-slate-900 dark:text-white text-sm font-medium">数据整形 (Reshape)</span>
+                        <span class="text-slate-400 dark:text-slate-500 text-xs">宽⇄长表转换</span>
                     </div>
                 </label>
             </div>
 
             <!-- 变量设置 (#variable-section) & 分析按钮 (#action-section) -->
-            <div id="variable-section" hidden class="mt-auto p-4 flex flex-col gap-3 border-t border-slate-200 dark:border-slate-800">
+            <div id="variable-section" hidden
+                class="mt-auto p-4 flex flex-col gap-3 border-t border-slate-200 dark:border-slate-800">
                 <div class="flex flex-col">
                     <p class="text-slate-900 dark:text-white text-sm font-bold">变量与配置</p>
                     <div id="variable-summary" class="text-xs text-slate-500 mt-1">
-                        已选因子: <span id="summary-factors" class="font-bold text-slate-700">0</span>, 已选性状: <span id="summary-targets" class="font-bold text-slate-700">0</span>
+                        已选因子: <span id="summary-factors" class="font-bold text-slate-700">0</span>, 已选性状: <span
+                            id="summary-targets" class="font-bold text-slate-700">0</span>
                     </div>
                 </div>
-                
+
                 <!-- Cluster Params Container inside sidebar -->
-                <div id="cluster-params" hidden class="flex-col gap-2 mt-2 bg-slate-50 p-3 rounded border border-slate-200">
+                <div id="cluster-params" hidden
+                    class="flex-col gap-2 mt-2 bg-slate-50 p-3 rounded border border-slate-200">
                     <div class="flex items-center justify-between">
                         <label class="text-xs font-semibold">聚类数 (K)</label>
-                        <input type="number" id="cluster-k" value="3" min="2" max="10" class="w-16 h-7 text-xs px-2 border rounded">
+                        <input type="number" id="cluster-k" value="3" min="2" max="10"
+                            class="w-16 h-7 text-xs px-2 border rounded">
                     </div>
                     <div class="flex items-center justify-between mt-1">
                         <label class="text-xs font-semibold">算法</label>
@@ -173,19 +250,22 @@
                         </select>
                     </div>
                     <div class="flex items-center gap-2 mt-1">
-                        <input type="checkbox" id="cluster-use-means" class="rounded text-primary focus:ring-primary h-3 w-3">
+                        <input type="checkbox" id="cluster-use-means"
+                            class="rounded text-primary focus:ring-primary h-3 w-3">
                         <label for="cluster-use-means" class="text-xs cursor-pointer">使用分组均值</label>
                     </div>
                 </div>
 
-                <button id="btn-open-variable-modal" class="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 py-2.5 text-slate-700 dark:text-slate-200 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-all mt-2">
+                <button id="btn-open-variable-modal"
+                    class="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 py-2.5 text-slate-700 dark:text-slate-200 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-all mt-2">
                     <span class="material-symbols-outlined text-[20px]">tune</span>
                     <span class="text-sm font-medium">配置变量</span>
                 </button>
             </div>
-            
+
             <div id="action-section" hidden class="px-4 pb-4">
-                <button id="btn-analyze" class="flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-white shadow-sm hover:bg-blue-600 active:scale-[0.98] transition-all">
+                <button id="btn-analyze"
+                    class="flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-white shadow-sm hover:bg-blue-600 active:scale-[0.98] transition-all">
                     <span class="material-symbols-outlined text-[20px]">rocket_launch</span>
                     <span class="text-sm font-bold">分析数据</span>
                 </button>
@@ -193,19 +273,28 @@
         </aside>
 
         <!-- MAIN CONTENT -->
-        <main class="flex flex-1 flex-col h-full min-w-0 bg-background-light dark:bg-background-dark overflow-hidden relative">
-            <header class="flex h-16 shrink-0 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-6 z-10">
+        <main
+            class="flex flex-1 flex-col h-full min-w-0 bg-background-light dark:bg-background-dark overflow-hidden relative">
+            <header
+                class="flex h-16 shrink-0 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-6 z-10">
                 <div class="flex items-center gap-4">
                     <h2 class="text-lg font-bold text-slate-900 dark:text-white">分析结果概览</h2>
                     <div class="hidden h-6 w-px bg-slate-200 sm:block"></div>
-                    <div class="hidden items-center gap-2 rounded-lg bg-slate-100 px-3 py-1.5 sm:flex" id="result-controls">
+                    <div class="hidden items-center gap-2 rounded-lg bg-slate-100 px-3 py-1.5 sm:flex"
+                        id="result-controls">
                         <span class="material-symbols-outlined text-slate-400 text-lg">folder_open</span>
-                        <input id="save-path-input" type="text" placeholder="本地保存路径" class="w-64 bg-transparent border-none p-0 text-xs font-medium text-slate-600 focus:ring-0 placeholder-slate-400"/>
+                        <input id="save-path-input" type="text" placeholder="本地保存路径"
+                            class="w-64 bg-transparent border-none p-0 text-xs font-medium text-slate-600 focus:ring-0 placeholder-slate-400" />
                         <button id="btn-browse-path" class="text-xs text-primary hover:underline ml-1">浏览</button>
                     </div>
                 </div>
                 <div class="flex items-center gap-3">
-                    <button id="btn-export" class="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
+                    {% if auth_enabled %}
+                    <a href="{{ url_for('auth.logout') }}"
+                        class="flex items-center gap-2 rounded-lg border border-slate-200 bg-white dark:bg-slate-800 dark:border-slate-700 px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">退出登录</a>
+                    {% endif %}
+                    <button id="btn-export"
+                        class="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
                         <span class="text-green-600 material-symbols-outlined text-[18px]">download</span>
                         导出至 Excel
                     </button>
@@ -214,17 +303,23 @@
 
             <div class="flex flex-1 flex-col overflow-y-auto w-full relative h-[calc(100vh-64px)]">
                 <!-- Empty State -->
-                <div id="empty-state" class="flex flex-col items-center justify-center h-full text-slate-400 absolute inset-0 z-[5]">
+                <div id="empty-state"
+                    class="flex flex-col items-center justify-center h-full text-slate-400 absolute inset-0 z-[5]">
                     <span class="material-symbols-outlined text-[80px] mb-4 opacity-50">data_exploration</span>
                     <h2 class="text-xl font-bold text-slate-700">开始您的数据分析</h2>
                     <p class="text-sm mt-2">请在左侧上传数据文件，选择分析方法并配置变量。</p>
                 </div>
 
                 <!-- Loading State -->
-                <div id="loading-section" hidden class="flex flex-col items-center justify-center h-full text-slate-500 absolute inset-0 bg-white/80 z-[10] backdrop-blur-sm">
-                    <svg class="animate-spin -ml-1 mr-3 h-10 w-10 text-primary mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                <div id="loading-section" hidden
+                    class="flex flex-col items-center justify-center h-full text-slate-500 absolute inset-0 bg-white/90 z-[10]">
+                    <svg class="animate-spin -ml-1 mr-3 h-10 w-10 text-primary mb-4" xmlns="http://www.w3.org/2000/svg"
+                        fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4">
+                        </circle>
+                        <path class="opacity-75" fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                        </path>
                     </svg>
                     <h3 class="text-lg font-bold">正在分析数据...</h3>
                     <p class="text-sm">请稍候，系统正在处理计算</p>
@@ -240,29 +335,56 @@
                     <!-- Result Content wrapper -->
                     <div id="result-tab-content" class="p-6 h-full">
                         <!-- ANOVA Result Panels -->
-                        <div id="panel-sliced-sep" class="tab-pane active h-full"><div id="sliced-sep-table" class="table-container shadow-sm border border-slate-200 rounded-xl h-full"></div></div>
-                        <div id="panel-sliced" class="tab-pane h-full"><div id="sliced-table" class="table-container shadow-sm border border-slate-200 rounded-xl h-full"></div></div>
-                        <div id="panel-main" class="tab-pane h-full"><div id="main-table" class="table-container shadow-sm border border-slate-200 rounded-xl h-full"></div></div>
-                        <div id="panel-anova" class="tab-pane h-full"><div id="anova-table" class="table-container shadow-sm border border-slate-200 rounded-xl h-full"></div></div>
-                        <div id="panel-corr" class="tab-pane h-full"><div id="corr-table" class="table-container shadow-sm border border-slate-200 rounded-xl h-full"></div></div>
+                        <div id="panel-sliced-sep" class="tab-pane active h-full">
+                            <div id="sliced-sep-table"
+                                class="table-container shadow-sm border border-slate-200 rounded-xl h-full"></div>
+                        </div>
+                        <div id="panel-sliced" class="tab-pane h-full">
+                            <div id="sliced-table"
+                                class="table-container shadow-sm border border-slate-200 rounded-xl h-full"></div>
+                        </div>
+                        <div id="panel-main" class="tab-pane h-full">
+                            <div id="main-table"
+                                class="table-container shadow-sm border border-slate-200 rounded-xl h-full"></div>
+                        </div>
+                        <div id="panel-anova" class="tab-pane h-full">
+                            <div id="anova-table"
+                                class="table-container shadow-sm border border-slate-200 rounded-xl h-full"></div>
+                        </div>
+                        <div id="panel-corr" class="tab-pane h-full">
+                            <div id="corr-table"
+                                class="table-container shadow-sm border border-slate-200 rounded-xl h-full"></div>
+                        </div>
 
                         <!-- PCA Results -->
-                        <div id="panel-pca-scree" class="tab-pane h-full"><div id="pca-scree-plot" class="plot-container h-full"></div></div>
+                        <div id="panel-pca-scree" class="tab-pane h-full">
+                            <div id="pca-scree-plot" class="plot-container h-full"></div>
+                        </div>
                         <div id="panel-pca-biplot" class="tab-pane h-full flex flex-col">
-                            <div class="toolbar biplot-toolbar bg-white p-3 rounded-xl border border-slate-200 mb-4 shadow-sm flex items-center gap-4">
+                            <div
+                                class="toolbar biplot-toolbar bg-white p-3 rounded-xl border border-slate-200 mb-4 shadow-sm flex items-center gap-4">
                                 <div class="btn-group flex items-center bg-slate-100 rounded-lg p-1">
-                                    <button class="px-3 py-1 rounded-md text-sm font-medium transition-colors bg-white shadow-sm text-slate-800" data-view="2d" id="btn-biplot-2d">2D</button>
-                                    <button class="px-3 py-1 rounded-md text-sm font-medium transition-colors text-slate-500 hover:text-slate-800 hover:bg-white/50" data-view="3d" id="btn-biplot-3d">3D</button>
+                                    <button
+                                        class="px-3 py-1 rounded-md text-sm font-medium transition-colors bg-white shadow-sm text-slate-800"
+                                        data-view="2d" id="btn-biplot-2d">2D</button>
+                                    <button
+                                        class="px-3 py-1 rounded-md text-sm font-medium transition-colors text-slate-500 hover:text-slate-800 hover:bg-white/50"
+                                        data-view="3d" id="btn-biplot-3d">3D</button>
                                 </div>
                                 <div class="axis-selectors flex items-center gap-2">
-                                    <select id="biplot-x-select" class="form-select-sm text-sm border-slate-200 rounded" title="X轴主成分"></select>
+                                    <select id="biplot-x-select" class="form-select-sm text-sm border-slate-200 rounded"
+                                        title="X轴主成分"></select>
                                     <span class="text-slate-400">×</span>
-                                    <select id="biplot-y-select" class="form-select-sm text-sm border-slate-200 rounded" title="Y轴主成分"></select>
-                                    <select id="biplot-z-select" class="form-select-sm text-sm border-slate-200 rounded hidden" title="Z轴主成分"></select>
+                                    <select id="biplot-y-select" class="form-select-sm text-sm border-slate-200 rounded"
+                                        title="Y轴主成分"></select>
+                                    <select id="biplot-z-select"
+                                        class="form-select-sm text-sm border-slate-200 rounded hidden"
+                                        title="Z轴主成分"></select>
                                 </div>
                                 <div class="group-selector border-l border-slate-200 pl-4 flex items-center gap-2">
                                     <label class="text-xs font-semibold text-slate-600">颜色分组:</label>
-                                    <select id="biplot-group-select" class="form-select-sm text-sm border-slate-200 rounded w-24">
+                                    <select id="biplot-group-select"
+                                        class="form-select-sm text-sm border-slate-200 rounded w-24">
                                         <option value="">(无)</option>
                                     </select>
                                 </div>
@@ -271,36 +393,67 @@
                                     <span>置信椭圆</span>
                                 </label>
                                 <div id="ellipse-options" class="hidden items-center ml-2">
-                                    <input type="range" id="pca-confidence-level" min="50" max="99" value="95" class="w-20">
+                                    <input type="range" id="pca-confidence-level" min="50" max="99" value="95"
+                                        class="w-20">
                                 </div>
-                                <button id="btn-update-biplot" class="ml-auto px-4 py-1.5 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-hover transition-colors">更新图表</button>
+                                <button id="btn-update-biplot"
+                                    class="ml-auto px-4 py-1.5 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-hover transition-colors">更新图表</button>
                             </div>
-                            <div id="pca-biplot-2d" class="plot-container flex-1 bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm"></div>
-                            <div id="pca-biplot-3d" class="plot-container flex-1 bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm hidden"></div>
+                            <div id="pca-biplot-2d"
+                                class="plot-container flex-1 bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                            </div>
+                            <div id="pca-biplot-3d"
+                                class="plot-container flex-1 bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm hidden">
+                            </div>
                         </div>
-                        <div id="panel-pca-variance" class="tab-pane h-full"><div id="pca-variance-table" class="table-container shadow-sm border border-slate-200 rounded-xl h-full"></div></div>
-                        <div id="panel-pca-loadings" class="tab-pane h-full"><div id="pca-loadings-table" class="table-container shadow-sm border border-slate-200 rounded-xl h-full"></div></div>
-                        <div id="panel-pca-scores" class="tab-pane h-full"><div id="pca-scores-table" class="table-container shadow-sm border border-slate-200 rounded-xl h-full"></div></div>
+                        <div id="panel-pca-variance" class="tab-pane h-full">
+                            <div id="pca-variance-table"
+                                class="table-container shadow-sm border border-slate-200 rounded-xl h-full"></div>
+                        </div>
+                        <div id="panel-pca-loadings" class="tab-pane h-full">
+                            <div id="pca-loadings-table"
+                                class="table-container shadow-sm border border-slate-200 rounded-xl h-full"></div>
+                        </div>
+                        <div id="panel-pca-scores" class="tab-pane h-full">
+                            <div id="pca-scores-table"
+                                class="table-container shadow-sm border border-slate-200 rounded-xl h-full"></div>
+                        </div>
 
                         <!-- Cluster Results -->
-                        <div id="panel-cluster-summary" class="tab-pane h-full"><div id="cluster-summary-content" class="summary-container h-full"></div></div>
-                        <div id="panel-cluster-scatter" class="tab-pane h-full"><div id="cluster-scatter-plot" class="plot-container h-full"></div></div>
+                        <div id="panel-cluster-summary" class="tab-pane h-full">
+                            <div id="cluster-summary-content" class="summary-container h-full"></div>
+                        </div>
+                        <div id="panel-cluster-scatter" class="tab-pane h-full">
+                            <div id="cluster-scatter-plot" class="plot-container h-full"></div>
+                        </div>
                         <div id="panel-cluster-heatmap" class="tab-pane h-full">
                             <div class="flex gap-4 h-full">
-                                <div id="cluster-corr-heatmap-plot" class="flex-1 plot-container shadow-sm border border-slate-200 rounded-xl"></div>
-                                <div id="cluster-heatmap-plot" class="flex-1 plot-container shadow-sm border border-slate-200 rounded-xl"></div>
+                                <div id="cluster-corr-heatmap-plot"
+                                    class="flex-1 plot-container shadow-sm border border-slate-200 rounded-xl"></div>
+                                <div id="cluster-heatmap-plot"
+                                    class="flex-1 plot-container shadow-sm border border-slate-200 rounded-xl"></div>
                             </div>
                         </div>
                         <div id="panel-cluster-data" class="tab-pane h-full flex flex-col">
-                            <div class="toolbar flex justify-between items-center mb-4 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-                                <select id="cluster-filter-select" class="form-select-sm w-32 border-slate-200 rounded"><option value="all">全部数据</option></select>
-                                <button id="btn-export-cluster" class="btn-outline-sm border border-slate-300 px-3 py-1 rounded text-sm hover:border-primary hover:text-primary transition-colors">导出 CSV</button>
+                            <div
+                                class="toolbar flex justify-between items-center mb-4 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                                <select id="cluster-filter-select" class="form-select-sm w-32 border-slate-200 rounded">
+                                    <option value="all">全部数据</option>
+                                </select>
+                                <button id="btn-export-cluster"
+                                    class="btn-outline-sm border border-slate-300 px-3 py-1 rounded text-sm hover:border-primary hover:text-primary transition-colors">导出
+                                    CSV</button>
                             </div>
-                            <div id="cluster-data-table" class="table-container flex-1 shadow-sm border border-slate-200 rounded-xl h-full"></div>
+                            <div id="cluster-data-table"
+                                class="table-container flex-1 shadow-sm border border-slate-200 rounded-xl h-full">
+                            </div>
                         </div>
                         <div id="panel-cluster-elbow" class="tab-pane h-full flex flex-col">
-                            <button id="btn-elbow" class="btn-outline-sm self-start mb-4 border border-slate-300 px-3 py-1 rounded text-sm hover:border-primary hover:text-primary transition-colors">重新生成肘部图</button>
-                            <div id="cluster-elbow-plot" class="plot-container flex-1 bg-white shadow-sm border border-slate-200 rounded-xl h-full"></div>
+                            <button id="btn-elbow"
+                                class="btn-outline-sm self-start mb-4 border border-slate-300 px-3 py-1 rounded text-sm hover:border-primary hover:text-primary transition-colors">重新生成肘部图</button>
+                            <div id="cluster-elbow-plot"
+                                class="plot-container flex-1 bg-white shadow-sm border border-slate-200 rounded-xl h-full">
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -308,17 +461,153 @@
                 <!-- Heatmap Section Specific -->
                 <div id="heatmap-section" hidden class="flex flex-col p-6 h-full overflow-hidden">
                     <h2 class="text-lg font-bold mb-4">相关性热图分析</h2>
-                    <div id="heatmap-result" class="flex-1 overflow-hidden flex flex-col bg-white border border-slate-200 shadow-sm rounded-xl">
+                    <div id="heatmap-result"
+                        class="flex-1 overflow-hidden flex flex-col bg-white border border-slate-200 shadow-sm rounded-xl">
                         <div class="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
                             <h5 class="font-bold text-sm">热图预览</h5>
                             <div class="flex gap-2">
-                                <button class="btn-download-heatmap px-3 py-1.5 border border-slate-200 bg-white hover:bg-slate-50 rounded text-xs transition-colors shadow-sm" data-format="png">PNG格式</button>
-                                <button class="btn-download-heatmap px-3 py-1.5 border border-slate-200 bg-white hover:bg-slate-50 rounded text-xs transition-colors shadow-sm" data-format="pdf">PDF格式</button>
-                                <button class="btn-download-heatmap px-3 py-1.5 border border-slate-200 bg-white hover:bg-slate-50 rounded text-xs transition-colors shadow-sm" data-format="svg">SVG格式</button>
+                                <button
+                                    class="btn-download-heatmap px-3 py-1.5 border border-slate-200 bg-white hover:bg-slate-50 rounded text-xs transition-colors shadow-sm"
+                                    data-format="png">PNG格式</button>
+                                <button
+                                    class="btn-download-heatmap px-3 py-1.5 border border-slate-200 bg-white hover:bg-slate-50 rounded text-xs transition-colors shadow-sm"
+                                    data-format="pdf">PDF格式</button>
+                                <button
+                                    class="btn-download-heatmap px-3 py-1.5 border border-slate-200 bg-white hover:bg-slate-50 rounded text-xs transition-colors shadow-sm"
+                                    data-format="svg">SVG格式</button>
                             </div>
                         </div>
                         <div class="p-4 flex-1 overflow-auto flex items-center justify-center">
                             <img id="heatmap-preview" class="max-h-full max-w-full" src="" alt="热图预览">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Reshape Section (AI Only) -->
+                <div id="reshape-section" hidden class="flex flex-col p-6 h-full overflow-hidden">
+                    <!-- Header -->
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-3">
+                            <div
+                                class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-md">
+                                <span class="material-symbols-outlined text-xl">auto_fix_high</span>
+                            </div>
+                            <div>
+                                <h2 class="text-lg font-bold text-slate-900">AI 智能整理</h2>
+                                <p class="text-xs text-slate-500">自动识别复杂 Excel 表结构，一键转为分析用格式</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Content: Left Config + Right Preview -->
+                    <div class="flex gap-4 flex-1 overflow-hidden">
+                        <!-- Left Config -->
+                        <div class="w-80 shrink-0 flex flex-col gap-3 overflow-y-auto">
+                            <!-- AI Info Card -->
+                            <div
+                                class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-200 shadow-sm p-4">
+                                <div class="flex items-center gap-2 mb-2">
+                                    <span class="material-symbols-outlined text-blue-600 text-2xl">smart_toy</span>
+                                    <span class="text-base font-bold text-blue-800">DeepSeek V3</span>
+                                </div>
+                                <p class="text-xs text-blue-700 leading-relaxed">
+                                    自动识别合并单元格、多行表头、多区域交错数据，
+                                    合并所有时期与指标生成标准分析宽表。
+                                </p>
+                            </div>
+
+                            <!-- Hidden API Config -->
+                            <div style="display: none;">
+                                <input type="password" id="llm-api-key"
+                                    value="">
+                                <select id="llm-model">
+                                    <option value="deepseek-ai/DeepSeek-V3" selected>DeepSeek V3</option>
+                                </select>
+                            </div>
+
+                            <!-- Execute Button -->
+                            <button id="btn-llm-tidy" onclick="executeLlmTidy()"
+                                class="w-full flex items-center justify-center gap-2 px-3 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-sm font-bold rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all shadow-md">
+                                <span class="material-symbols-outlined text-lg">auto_fix_high</span>
+                                一键 AI 智能整理
+                            </button>
+
+                            <!-- Status -->
+                            <div id="smart-scan-status"
+                                class="bg-white rounded-xl border border-slate-200 shadow-sm p-3">
+                                <p class="text-xs text-slate-400 text-center py-1">上传 Excel 后点击按钮开始</p>
+                            </div>
+
+                            <!-- LLM Description (shown after execution) -->
+                            <div id="llm-description" hidden
+                                class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                                <div class="p-3 bg-slate-50 border-b border-slate-200">
+                                    <span class="text-sm font-bold text-slate-700">AI 分析结果</span>
+                                </div>
+                                <div class="p-3">
+                                    <p id="llm-desc-text" class="text-xs text-slate-600 leading-relaxed"></p>
+                                    <div id="llm-tables-list" class="mt-2 text-xs text-slate-500"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Right Preview -->
+                        <div class="flex-1 flex flex-col gap-3 min-w-0 overflow-hidden">
+                            <!-- Original Data Preview -->
+                            <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col"
+                                style="max-height: 35%">
+                                <div
+                                    class="p-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
+                                    <div class="flex items-center gap-2">
+                                        <span
+                                            class="material-symbols-outlined text-slate-500 text-lg">table_chart</span>
+                                        <span class="text-sm font-bold text-slate-700">原始数据预览</span>
+                                    </div>
+                                    <span id="reshape-original-info" class="text-xs text-slate-400"></span>
+                                </div>
+                                <div id="reshape-original-table" class="flex-1 overflow-auto p-0">
+                                    <p class="text-sm text-slate-400 text-center py-8">上传数据后自动显示预览</p>
+                                </div>
+                            </div>
+
+                            <!-- Arrow -->
+                            <div class="flex items-center justify-center py-2 shrink-0">
+                                <div
+                                    class="bg-blue-50 text-blue-600 px-4 py-1.5 rounded-full text-xs font-bold border border-blue-100 flex items-center gap-2">
+                                    <span class="material-symbols-outlined text-sm">arrow_downward</span>
+                                    AI 智能整理
+                                    <span class="material-symbols-outlined text-sm">arrow_downward</span>
+                                </div>
+                            </div>
+
+                            <!-- Result Preview -->
+                            <div
+                                class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col flex-1">
+                                <div
+                                    class="p-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
+                                    <div class="flex items-center gap-2">
+                                        <span
+                                            class="material-symbols-outlined text-emerald-500 text-lg">check_circle</span>
+                                        <span class="text-sm font-bold text-slate-700">转换结果预览</span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <span id="reshape-result-info" class="text-xs text-slate-400"></span>
+                                        <button id="btn-reshape-export" hidden
+                                            class="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition-colors shadow-sm">
+                                            <span class="material-symbols-outlined text-sm">download</span>
+                                            导出 Excel
+                                        </button>
+                                        <button id="btn-reshape-use" hidden
+                                            class="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 text-white rounded-lg text-xs font-bold hover:bg-violet-700 transition-colors shadow-sm">
+                                            <span class="material-symbols-outlined text-sm">open_in_new</span>
+                                            用于分析
+                                        </button>
+                                    </div>
+                                </div>
+                                <div id="reshape-result-table" class="flex-1 overflow-auto p-0">
+                                    <p class="text-sm text-slate-400 text-center py-8">点击「一键 AI 智能整理」查看结果</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -327,11 +616,12 @@
     </div>
 
     <!-- Sheet Modal (Wait, we can use simple Tailwind styles or reuse the old class) -->
-    <div class="modal-overlay fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 items-center justify-center" id="sheet-modal">
+    <div class="modal-overlay fixed inset-0 bg-slate-900/50 z-50 items-center justify-center" id="sheet-modal">
         <div class="bg-white rounded-xl shadow-xl w-[400px] overflow-hidden">
             <div class="flex items-center justify-between p-4 border-b">
                 <h3 class="font-bold text-lg">选择工作表</h3>
-                <button id="close-modal" class="text-slate-400 hover:text-slate-600"><span class="material-symbols-outlined">close</span></button>
+                <button id="close-modal" class="text-slate-400 hover:text-slate-600"><span
+                        class="material-symbols-outlined">close</span></button>
             </div>
             <div class="p-4">
                 <p class="text-sm text-slate-500 mb-4">该文件包含多个工作表，请选择一个：</p>
@@ -343,8 +633,10 @@
     <div id="toast" class="toast"></div>
 
     <!-- VARIABLE SELECTION MODAL (NEW DESIGN) -->
-    <div class="modal-overlay fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[100] items-center justify-center w-full h-full p-6 p-4" id="variable-modal">
-        <div class="relative w-full max-w-[1200px] h-[90vh] bg-white rounded-xl shadow-2xl flex flex-col overflow-hidden border border-slate-200">
+    <div class="modal-overlay fixed inset-0 bg-slate-900/50 z-[100] items-center justify-center w-full h-full p-6 p-4"
+        id="variable-modal">
+        <div
+            class="relative w-full max-w-[1200px] h-[90vh] bg-white rounded-xl shadow-2xl flex flex-col overflow-hidden border border-slate-200">
             <!-- Modal Header -->
             <div class="px-6 py-5 border-b border-slate-200 flex justify-between items-center bg-slate-50">
                 <div>
@@ -355,19 +647,23 @@
                     <span class="material-symbols-outlined text-2xl">close</span>
                 </button>
             </div>
-            
+
             <!-- Modal Body (Transfer Component) -->
             <div class="flex-1 overflow-hidden p-6 gap-6 bg-white w-full flex flex-col lg:flex-row">
                 <!-- Left Source Table -->
-                <div class="w-full lg:w-1/3 flex flex-col h-full min-h-0 border border-slate-200 rounded-lg bg-slate-50">
+                <div
+                    class="w-full lg:w-1/3 flex flex-col h-full min-h-0 border border-slate-200 rounded-lg bg-slate-50">
                     <div class="p-3 border-b border-slate-200 bg-white rounded-t-lg flex items-center justify-between">
                         <span class="font-semibold text-sm">可用变量</span>
-                        <span id="source-count" class="bg-primary/10 text-primary text-xs px-2 py-0.5 rounded-full font-bold">0</span>
+                        <span id="source-count"
+                            class="bg-primary/10 text-primary text-xs px-2 py-0.5 rounded-full font-bold">0</span>
                     </div>
                     <div class="p-2 bg-white border-b border-slate-200">
                         <div class="relative">
-                            <span class="absolute inset-y-0 left-0 flex items-center pl-2 text-slate-400"><span class="material-symbols-outlined text-[18px]">search</span></span>
-                            <input type="text" id="variable-search" placeholder="搜索可用变量..." class="w-full pl-8 pr-2 py-1.5 text-sm bg-slate-50 border border-slate-200 rounded focus:border-primary focus:ring-1 focus:ring-primary">
+                            <span class="absolute inset-y-0 left-0 flex items-center pl-2 text-slate-400"><span
+                                    class="material-symbols-outlined text-[18px]">search</span></span>
+                            <input type="text" id="variable-search" placeholder="搜索可用变量..."
+                                class="w-full pl-8 pr-2 py-1.5 text-sm bg-slate-50 border border-slate-200 rounded focus:border-primary focus:ring-1 focus:ring-primary">
                         </div>
                     </div>
                     <!-- Source List Item Mapping Base (Overridden in JS, but using CSS classes applied by JS) -->
@@ -376,7 +672,8 @@
                 </div>
 
                 <!-- Middle Transfer Actions -->
-                <div class="flex flex-row lg:flex-col items-center justify-center gap-2 py-4 lg:py-0 px-2" id="modal-actions">
+                <div class="flex flex-row lg:flex-col items-center justify-center gap-2 py-4 lg:py-0 px-2"
+                    id="modal-actions">
                     <!-- Actions injected by app.js -->
                 </div>
 
@@ -388,10 +685,12 @@
 
             <!-- Modal Footer -->
             <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-3 items-center">
-                <button id="cancel-variable-modal" class="px-6 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 rounded-lg transition-colors border border-slate-300 bg-white">
+                <button id="cancel-variable-modal"
+                    class="px-6 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 rounded-lg transition-colors border border-slate-300 bg-white">
                     取消
                 </button>
-                <button id="confirm-variable-modal" class="px-8 py-2 text-sm font-medium text-white bg-primary hover:bg-blue-600 rounded-lg shadow-sm transition-all flex items-center gap-2">
+                <button id="confirm-variable-modal"
+                    class="px-8 py-2 text-sm font-medium text-white bg-primary hover:bg-blue-600 rounded-lg shadow-sm transition-all flex items-center gap-2">
                     <span class="material-symbols-outlined text-lg">check</span> 确认选择
                 </button>
             </div>
@@ -399,11 +698,12 @@
     </div>
 
     <!-- Config Modal (Normalization) -->
-    <div class="modal-overlay fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 items-center justify-center" id="config-modal">
+    <div class="modal-overlay fixed inset-0 bg-slate-900/50 z-50 items-center justify-center" id="config-modal">
         <div class="bg-white rounded-xl shadow-xl w-[400px] overflow-hidden">
             <div class="flex justify-between items-center p-4 border-b bg-slate-50">
                 <h3 id="config-modal-title" class="font-bold">变量方向配置</h3>
-                <button id="close-config-modal" class="text-slate-400 hover:text-slate-600"><span class="material-symbols-outlined">close</span></button>
+                <button id="close-config-modal" class="text-slate-400 hover:text-slate-600"><span
+                        class="material-symbols-outlined">close</span></button>
             </div>
             <div class="p-5">
                 <label class="block text-sm font-medium mb-2">指标类型</label>
@@ -414,24 +714,28 @@
                 </select>
                 <div id="config-interval-params" hidden class="mt-4 bg-slate-50 p-3 rounded">
                     <div class="flex gap-4">
-                        <label class="flex-1 text-sm">下限(a)<input type="number" id="config-a" class="w-full mt-1 border px-2 py-1 rounded"></label>
-                        <label class="flex-1 text-sm">上限(b)<input type="number" id="config-b" class="w-full mt-1 border px-2 py-1 rounded"></label>
+                        <label class="flex-1 text-sm">下限(a)<input type="number" id="config-a"
+                                class="w-full mt-1 border px-2 py-1 rounded"></label>
+                        <label class="flex-1 text-sm">上限(b)<input type="number" id="config-b"
+                                class="w-full mt-1 border px-2 py-1 rounded"></label>
                     </div>
                 </div>
             </div>
             <div class="flex justify-end gap-2 p-4 bg-slate-100 border-t border-slate-200">
-                <button id="cancel-config-btn" class="px-4 py-1.5 border rounded bg-white hover:bg-slate-50 text-sm">取消</button>
-                <button id="save-config-btn" class="px-4 py-1.5 rounded bg-primary text-white hover:bg-blue-600 text-sm">保存</button>
+                <button id="cancel-config-btn"
+                    class="px-4 py-1.5 border rounded bg-white hover:bg-slate-50 text-sm">取消</button>
+                <button id="save-config-btn"
+                    class="px-4 py-1.5 rounded bg-primary text-white hover:bg-blue-600 text-sm">保存</button>
             </div>
         </div>
     </div>
 
-    <script src="/static/app.js?v=35"></script>
+    <script src="/static/app.js?v=43"></script>
     <script>
-        window.addEventListener('beforeunload', function() {
+        window.addEventListener('beforeunload', function () {
             navigator.sendBeacon('/api/shutdown');
         });
-        
+
         // Setup simple tab button toggling CSS classes
         const style = document.createElement('style');
         style.innerHTML = `
@@ -468,4 +772,5 @@
         document.head.appendChild(style);
     </script>
 </body>
+
 </html>

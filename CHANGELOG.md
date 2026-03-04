@@ -1,3 +1,8 @@
+## 2026-03-04 23:18
+- 实现双擎数据整理：`/api/llm_tidy` 改为 SmartTidy 优先，失败时自动回退到 LLM（支持 `api_key`/`model`/`api_base`）。
+- 统一双擎成功返回结构并新增 `engine` 标识，保持前端预览与导出链路兼容。
+- 新增接口测试：覆盖本地引擎成功路径与 LLM 兜底路径。
+
 ## 2026-03-01 17:28
 - **重构**: 替换并集成全新的基于 Tailwind CSS 的数据分析看板与变量选择 Modal (Variable Picker) 设计
   - 移除了依赖旧式 .hidden 类导致的闪烁和冲突，平滑过渡了基于 `display: flex` 的响应式加载视图

@@ -30,6 +30,9 @@ const state = {
     heatmapX: [],
     heatmapY: [],
 
+    // Reshape Config
+    reshapeMode: 'melt', // 'melt' or 'pivot'
+
     results: null
 };
 
@@ -124,6 +127,7 @@ function init() {
     initConfigModal();
     initAnalysis();
     initHeatmap();
+    initReshape();
     initExport();
     initTabs();
     initSheetModal();
@@ -248,12 +252,30 @@ function initMethodSelection() {
 
 function updateUIForMethod() {
     const type = state.analysisType;
+    const reshapeSection = document.getElementById('reshape-section');
 
     // Update Sidebar config visibility
     if (type === 'cluster') {
         dom.clusterParams.hidden = false;
     } else {
         dom.clusterParams.hidden = true;
+    }
+
+    // Reshape mode: hide sidebar variable/action, show reshape panel
+    if (type === 'reshape') {
+        dom.variableSection.hidden = true;
+        dom.actionSection.hidden = true;
+        dom.resultSection.hidden = true;
+        dom.emptyState.hidden = true;
+        if (dom.heatmapSection) dom.heatmapSection.hidden = true;
+        if (reshapeSection) reshapeSection.hidden = false;
+        // 默认进入 smart 模式
+        setTimeout(() => setReshapeMode('smart'), 50);
+        // Load preview
+        if (state.dataId) loadReshapePreview();
+        return;
+    } else {
+        if (reshapeSection) reshapeSection.hidden = true;
     }
 
     // Heatmap Section Visibility
@@ -299,10 +321,15 @@ function updateSidebarSummary() {
         factorCount = state.factors.length;
         targetCount = state.targets.length;
     } else if (type === 'heatmap') {
-         factorLabel = 'X轴';
-         targetLabel = 'Y轴';
-         factorCount = state.heatmapX ? state.heatmapX.length : 0;
-         targetCount = state.heatmapY ? state.heatmapY.length : 0;
+        factorLabel = 'X轴';
+        targetLabel = 'Y轴';
+        factorCount = state.heatmapX ? state.heatmapX.length : 0;
+        targetCount = state.heatmapY ? state.heatmapY.length : 0;
+    } else if (type === 'reshape') {
+        factorLabel = '模式';
+        targetLabel = '列数';
+        factorCount = state.reshapeMode === 'melt' ? 1 : 0;
+        targetCount = state.columns.length;
     }
 
     dom.summaryFactors.parentNode.innerHTML = `
@@ -748,7 +775,7 @@ async function runAnalysis() {
         endpoint = '/api/analyze_pca';
     } else if (type === 'cluster') {
         if (state.targets.length < 1) {
-             return showToast('请选择至少一个聚类特征', 'error');
+            return showToast('请选择至少一个聚类特征', 'error');
         }
         payload.features = state.targets;
         payload.factors = state.factors; // Optional labels
@@ -880,8 +907,8 @@ function renderResults(data, type) {
                 </div>
                 <div style="display:flex; flex-wrap:wrap; gap:8px;">
                     ${data.summary.cluster_sizes.map(s =>
-                        `<span class="badge" style="font-size:0.9rem; padding:6px 10px;">Cluster ${s.cluster}: ${s.size} (${s.percentage}%)</span>`
-                    ).join('')}
+                `<span class="badge" style="font-size:0.9rem; padding:6px 10px;">Cluster ${s.cluster}: ${s.size} (${s.percentage}%)</span>`
+            ).join('')}
                 </div>
             `;
             document.getElementById('cluster-summary-content').innerHTML = sumHtml;
@@ -894,16 +921,16 @@ function renderResults(data, type) {
         // Render Cluster Data Table (Specific rendering for highlighted cells)
         const dt = document.getElementById('cluster-data-table');
         if (data.labeled_data && data.labeled_data.rows) {
-             let html = '<table><thead><tr>';
-             data.labeled_data.headers.forEach(h => html += `<th>${h}</th>`);
-             html += '</tr></thead><tbody>';
-             data.labeled_data.rows.forEach(row => {
-                 html += '<tr>';
-                 row.forEach(cell => html += `<td>${cell}</td>`);
-                 html += '</tr>';
-             });
-             html += '</tbody></table>';
-             dt.innerHTML = html;
+            let html = '<table><thead><tr>';
+            data.labeled_data.headers.forEach(h => html += `<th>${h}</th>`);
+            html += '</tr></thead><tbody>';
+            data.labeled_data.rows.forEach(row => {
+                html += '<tr>';
+                row.forEach(cell => html += `<td>${cell}</td>`);
+                html += '</tr>';
+            });
+            html += '</tbody></table>';
+            dt.innerHTML = html;
         }
 
         // Init Cluster Export Button
@@ -1319,6 +1346,547 @@ function showSheetModal(sheets, tempId, fileName) {
 function initTabs() {
     // Initial tab logic is handled by renderResults
 }
+
+// ===== Reshape Module =====
+
+// Reshape local state
+const reshapeState = {
+    mode: 'melt',
+    // Melt
+    meltIdVars: [],
+    meltValueVars: [],
+    // Pivot
+    pivotIndexCols: [],
+    // Original data preview
+    originalPreview: null
+};
+
+function initReshape() {
+    const btnExecute = document.getElementById('btn-reshape-execute');
+    const btnExport = document.getElementById('btn-reshape-export');
+    const btnUse = document.getElementById('btn-reshape-use');
+
+    if (btnExecute) btnExecute.addEventListener('click', executeReshape);
+    if (btnExport) btnExport.addEventListener('click', exportReshapeResult);
+    if (btnUse) btnUse.addEventListener('click', useReshapeResult);
+}
+
+// Reshape modes have been simplified to ONLY Smart Tidy
+window.setReshapeMode = function (mode) {
+    reshapeState.mode = 'smart';
+    state.reshapeMode = 'smart';
+};
+
+async function loadReshapePreview() {
+    if (!state.dataId) return;
+
+    try {
+        const res = await fetch('/api/reshape_preview', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ data_id: state.dataId })
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+
+        reshapeState.originalPreview = data;
+
+        // Render original preview table
+        const infoEl = document.getElementById('reshape-original-info');
+        if (infoEl) infoEl.textContent = `${data.rows} 行 × ${data.columns.length} 列 (显示前 ${data.preview_rows} 行)`;
+
+        const tableEl = document.getElementById('reshape-original-table');
+        if (tableEl && data.preview.length > 0) {
+            renderMiniTable(tableEl, data.preview);
+        }
+
+        // Reset and render available columns
+        reshapeState.meltIdVars = [];
+        reshapeState.meltValueVars = [];
+        reshapeState.pivotIndexCols = [];
+        renderReshapeAvailableCols();
+        renderReshapeTargetBoxes();
+
+        if (reshapeState.mode === 'pivot') {
+            populatePivotDropdowns();
+        }
+
+        // Clear result
+        const resultEl = document.getElementById('reshape-result-table');
+        if (resultEl) resultEl.innerHTML = '<p class="text-sm text-slate-400 text-center py-8">配置参数后点击「执行转换」查看结果</p>';
+        const btnExport = document.getElementById('btn-reshape-export');
+        const btnUse = document.getElementById('btn-reshape-use');
+        if (btnExport) btnExport.hidden = true;
+        if (btnUse) btnUse.hidden = true;
+    } catch (err) {
+        showToast('预览加载失败: ' + err.message, 'error');
+    }
+}
+
+function renderReshapeAvailableCols() {
+    const container = document.getElementById('reshape-available-cols');
+    const countEl = document.getElementById('reshape-available-count');
+    if (!container) return;
+
+    container.innerHTML = '';
+
+    // Determine which columns are already used
+    let usedCols = new Set();
+    if (reshapeState.mode === 'melt') {
+        usedCols = new Set([...reshapeState.meltIdVars, ...reshapeState.meltValueVars]);
+    } else {
+        usedCols = new Set([...reshapeState.pivotIndexCols]);
+    }
+
+    const available = state.columns.filter(c => !usedCols.has(c));
+    if (countEl) countEl.textContent = available.length;
+
+    available.forEach(col => {
+        const tag = document.createElement('button');
+        const isNum = state.columnTypes[col] === 'numeric';
+        tag.className = `px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer border ${isNum
+            ? 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 hover:border-blue-300'
+            : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 hover:border-amber-300'
+            }`;
+        tag.textContent = col;
+        tag.title = isNum ? '数值变量 - 点击添加' : '分类变量 - 点击添加';
+        tag.onclick = () => handleReshapeColClick(col);
+        container.appendChild(tag);
+    });
+}
+
+function handleReshapeColClick(col) {
+    if (reshapeState.mode === 'melt') {
+        // Auto-assign: categorical -> ID, numeric -> Value
+        const isNum = state.columnTypes[col] === 'numeric';
+        if (isNum) {
+            reshapeState.meltValueVars.push(col);
+        } else {
+            reshapeState.meltIdVars.push(col);
+        }
+    } else {
+        // Pivot: add to index cols
+        reshapeState.pivotIndexCols.push(col);
+    }
+    renderReshapeAvailableCols();
+    renderReshapeTargetBoxes();
+}
+
+function renderReshapeTargetBoxes() {
+    if (reshapeState.mode === 'melt') {
+        renderReshapeTagList('melt-id-vars', reshapeState.meltIdVars, 'meltIdVars',
+            'bg-violet-100 text-violet-700 border-violet-300');
+        renderReshapeTagList('melt-value-vars', reshapeState.meltValueVars, 'meltValueVars',
+            'bg-emerald-100 text-emerald-700 border-emerald-300');
+
+        const idCount = document.getElementById('melt-id-count');
+        const valCount = document.getElementById('melt-value-count');
+        if (idCount) idCount.textContent = reshapeState.meltIdVars.length;
+        if (valCount) valCount.textContent = reshapeState.meltValueVars.length;
+    } else {
+        renderReshapeTagList('pivot-index-cols', reshapeState.pivotIndexCols, 'pivotIndexCols',
+            'bg-violet-100 text-violet-700 border-violet-300');
+    }
+}
+
+function renderReshapeTagList(containerId, items, stateKey, colorClass) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.innerHTML = '';
+
+    if (items.length === 0) {
+        container.innerHTML = '<p class="text-xs text-slate-400 w-full text-center py-3">点击下方列名添加</p>';
+        return;
+    }
+
+    items.forEach(item => {
+        const tag = document.createElement('span');
+        tag.className = `inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border ${colorClass} cursor-pointer hover:opacity-75 transition-opacity`;
+        tag.innerHTML = `${item} <span class="text-xs opacity-60">×</span>`;
+        tag.title = '点击移除';
+        tag.onclick = () => {
+            reshapeState[stateKey] = reshapeState[stateKey].filter(x => x !== item);
+            renderReshapeAvailableCols();
+            renderReshapeTargetBoxes();
+        };
+        container.appendChild(tag);
+    });
+}
+
+function populatePivotDropdowns() {
+    const colSelect = document.getElementById('pivot-columns-col');
+    const valSelect = document.getElementById('pivot-values-col');
+    if (!colSelect || !valSelect) return;
+
+    // Save current selection
+    const currentCol = colSelect.value;
+    const currentVal = valSelect.value;
+
+    colSelect.innerHTML = '<option value="">-- 选择 --</option>';
+    valSelect.innerHTML = '<option value="">-- 选择 --</option>';
+
+    state.columns.forEach(col => {
+        // Columns dropdown: only show non-index columns
+        if (!reshapeState.pivotIndexCols.includes(col)) {
+            const opt1 = document.createElement('option');
+            opt1.value = col;
+            opt1.textContent = col;
+            colSelect.appendChild(opt1);
+
+            const opt2 = document.createElement('option');
+            opt2.value = col;
+            opt2.textContent = col;
+            valSelect.appendChild(opt2);
+        }
+    });
+
+    // Restore selection
+    if (currentCol) colSelect.value = currentCol;
+    if (currentVal) valSelect.value = currentVal;
+}
+
+function renderMiniTable(containerEl, data) {
+    if (!data || data.length === 0) {
+        containerEl.innerHTML = '<p class="text-sm text-slate-400 text-center py-4">无数据</p>';
+        return;
+    }
+
+    const cols = Object.keys(data[0]);
+
+    let html = '<table class="w-full text-xs border-collapse">';
+    html += '<thead class="sticky top-0 z-10"><tr>';
+    cols.forEach(col => {
+        html += `<th class="px-3 py-2 text-left font-bold text-slate-600 bg-slate-100 border-b border-slate-200 whitespace-nowrap">${col}</th>`;
+    });
+    html += '</tr></thead><tbody>';
+
+    data.forEach((row, idx) => {
+        const bgClass = idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50';
+        html += `<tr class="${bgClass} hover:bg-blue-50/50 transition-colors">`;
+        cols.forEach(col => {
+            const val = row[col];
+            const displayVal = val === null || val === undefined ? '' : String(val);
+            html += `<td class="px-3 py-1.5 border-b border-slate-100 whitespace-nowrap text-slate-700">${displayVal}</td>`;
+        });
+        html += '</tr>';
+    });
+
+    html += '</tbody></table>';
+    containerEl.innerHTML = html;
+}
+
+async function executeReshape() {
+    if (!state.dataId) return showToast('请先上传数据', 'error');
+
+    // 智能整理模式走单独流程
+    if (reshapeState.mode === 'smart') {
+        return executeSmartTidy();
+    }
+
+    let payload = {
+        data_id: state.dataId,
+        action: reshapeState.mode
+    };
+
+    if (reshapeState.mode === 'melt') {
+        if (reshapeState.meltIdVars.length === 0) return showToast('请选择至少一个 ID 列', 'error');
+        if (reshapeState.meltValueVars.length === 0) return showToast('请选择至少一个值列', 'error');
+
+        payload.id_vars = reshapeState.meltIdVars;
+        payload.value_vars = reshapeState.meltValueVars;
+        payload.var_name = document.getElementById('melt-var-name')?.value || '变量';
+        payload.value_name = document.getElementById('melt-value-name')?.value || '值';
+    } else if (reshapeState.mode === 'pivot') {
+        if (reshapeState.pivotIndexCols.length === 0) return showToast('请选择至少一个索引列', 'error');
+
+        const columnsCol = document.getElementById('pivot-columns-col')?.value;
+        const valuesCol = document.getElementById('pivot-values-col')?.value;
+        const aggFunc = document.getElementById('pivot-agg-func')?.value || 'first';
+
+        if (!columnsCol) return showToast('请选择列名列', 'error');
+        if (!valuesCol) return showToast('请选择值列', 'error');
+
+        payload.index_cols = reshapeState.pivotIndexCols;
+        payload.columns_col = columnsCol;
+        payload.values_col = valuesCol;
+        payload.agg_func = aggFunc;
+    }
+
+    const btn = document.getElementById('btn-reshape-execute');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="material-symbols-outlined text-lg animate-spin">progress_activity</span> 正在转换...';
+    }
+
+    try {
+        const res = await fetch('/api/reshape', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+
+        showReshapeResult(data);
+
+    } catch (err) {
+        showToast('转换失败: ' + err.message, 'error');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<span class="material-symbols-outlined text-lg">play_arrow</span> 执行转换';
+        }
+    }
+}
+
+async function exportReshapeResult() {
+    if (!state.dataId) return;
+
+    try {
+        const saveDir = dom.savePathInput?.value || '';
+        const res = await fetch('/api/export_reshape', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ data_id: state.dataId, save_dir: saveDir })
+        });
+
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || '导出失败');
+        }
+
+        // Trigger download
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `reshape_result.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        showToast('Excel 导出成功', 'success');
+    } catch (err) {
+        showToast('导出失败: ' + err.message, 'error');
+    }
+}
+
+async function useReshapeResult() {
+    if (!state.dataId) return;
+
+    try {
+        const res = await fetch('/api/reshape_load_result', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ data_id: state.dataId })
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+
+        // Load as new data source
+        loadDataSuccess(data, '整形结果数据');
+
+        // Switch to ANOVA method by default
+        const anovaRadio = document.querySelector('input[name="analysis-type"][value="anova"]');
+        if (anovaRadio) {
+            anovaRadio.checked = true;
+            state.analysisType = 'anova';
+            updateUIForMethod();
+        }
+
+        showToast('整形结果已加载为新数据源，可继续分析', 'success');
+    } catch (err) {
+        showToast('加载失败: ' + err.message, 'error');
+    }
+}
+
+// ===== 公共结果渲染 =====
+function showReshapeResult(data) {
+    const resultInfo = document.getElementById('reshape-result-info');
+    if (resultInfo) resultInfo.textContent = `${data.total_rows} 行 × ${data.columns.length} 列 (显示前 ${data.preview_rows} 行)`;
+
+    const resultTable = document.getElementById('reshape-result-table');
+    if (resultTable && data.preview.length > 0) {
+        renderMiniTable(resultTable, data.preview);
+    }
+
+    const btnExport = document.getElementById('btn-reshape-export');
+    const btnUse = document.getElementById('btn-reshape-use');
+    if (btnExport) btnExport.hidden = false;
+    if (btnUse) btnUse.hidden = false;
+
+    showToast(`转换成功！共 ${data.total_rows} 行 × ${data.columns.length} 列`, 'success');
+}
+
+// ===== 智能整理 (Smart Tidy) =====
+
+async function runSmartTidyScan() {
+    if (!state.dataId) return;
+
+    const statusEl = document.getElementById('smart-scan-status');
+    const structureEl = document.getElementById('smart-structure-info');
+    const optionsEl = document.getElementById('smart-options');
+
+    if (statusEl) statusEl.innerHTML = '<div class="flex items-center justify-center gap-2 py-2"><span class="material-symbols-outlined text-violet-500 animate-spin text-lg">progress_activity</span><span class="text-xs text-slate-500">正在扫描文件结构...</span></div>';
+
+    try {
+        const res = await fetch('/api/smart_tidy_scan', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ data_id: state.dataId })
+        });
+        const data = await res.json();
+        if (data.error) {
+            if (statusEl) statusEl.innerHTML = `<p class="text-xs text-red-500 text-center py-2">${data.error}</p>`;
+            return;
+        }
+
+        // 扫描成功
+        reshapeState.smartScanData = data;
+
+        // 更新状态
+        if (statusEl) statusEl.innerHTML = '<div class="flex items-center gap-2 py-1"><span class="material-symbols-outlined text-emerald-500 text-lg">check_circle</span><span class="text-xs text-emerald-600 font-bold">结构识别完成</span></div>';
+
+        // 显示检测到的结构
+        if (structureEl) {
+            structureEl.hidden = false;
+            const titleEl = document.getElementById('smart-title');
+            const mergedEl = document.getElementById('smart-merged');
+            const rowsEl = document.getElementById('smart-rows');
+            const factorsEl = document.getElementById('smart-factors');
+            const groupsEl = document.getElementById('smart-groups');
+            const subsEl = document.getElementById('smart-subs');
+
+            if (titleEl) titleEl.textContent = data.title || '(未检测到)';
+            if (mergedEl) mergedEl.textContent = data.merged_count || 0;
+            if (rowsEl) rowsEl.textContent = data.total_rows || 0;
+            if (factorsEl) factorsEl.textContent = data.factor_headers?.join(', ') || '-';
+            if (groupsEl) groupsEl.textContent = data.groups?.join(', ') || '(无分组)';
+            if (subsEl) subsEl.textContent = data.sub_labels?.join(', ') || '(无重复标签)';
+        }
+
+        // 显示选项
+        if (optionsEl) optionsEl.hidden = false;
+
+        // 渲染原始数据预览
+        if (data.preview && data.preview.length > 0) {
+            const tableEl = document.getElementById('reshape-original-table');
+            if (tableEl) renderMiniTable(tableEl, data.preview);
+            const infoEl = document.getElementById('reshape-original-info');
+            if (infoEl) infoEl.textContent = `${data.total_rows} 行 × ${data.total_cols} 列 (含 ${data.merged_count} 个合并单元格)`;
+        }
+
+    } catch (err) {
+        if (statusEl) statusEl.innerHTML = `<p class="text-xs text-red-500 text-center py-2">扫描失败: ${err.message}</p>`;
+    }
+}
+
+async function executeSmartTidy() {
+    if (!state.dataId) return showToast('请先上传数据', 'error');
+
+    const btn = document.getElementById('btn-reshape-execute');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="material-symbols-outlined text-lg animate-spin">progress_activity</span> 正在整理...';
+    }
+
+    try {
+        const dropAvg = document.getElementById('smart-drop-avg')?.checked ?? true;
+        const outputFormat = document.getElementById('smart-output-format')?.value || 'semi_long';
+
+        const res = await fetch('/api/smart_tidy_execute', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                data_id: state.dataId,
+                drop_avg: dropAvg,
+                output_format: outputFormat
+            })
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+
+        showReshapeResult(data);
+
+    } catch (err) {
+        showToast('整理失败: ' + err.message, 'error');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<span class="material-symbols-outlined text-lg">auto_fix_high</span> 执行智能整理';
+        }
+    }
+}
+
+// ===== AI 智能整理 (LLM Tidy) =====
+
+async function executeLlmTidy() {
+    if (!state.dataId) return showToast('请先上传 Excel 数据', 'error');
+
+    const apiKey = document.getElementById('llm-api-key')?.value?.trim();
+    if (!apiKey) return showToast('请输入 API Key', 'error');
+
+    const model = document.getElementById('llm-model')?.value || '';
+    const btn = document.getElementById('btn-llm-tidy');
+    const statusEl = document.getElementById('smart-scan-status');
+
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="material-symbols-outlined text-sm animate-spin">progress_activity</span> AI 分析中... (约30秒~2分钟)';
+    }
+    if (statusEl) {
+        statusEl.innerHTML = '<div class="flex items-center justify-center gap-2 py-2"><span class="material-symbols-outlined text-blue-500 animate-spin text-lg">progress_activity</span><span class="text-xs text-blue-600">DeepSeek V3 正在分析数据结构...</span></div>';
+    }
+
+    try {
+        const res = await fetch('/api/llm_tidy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                data_id: state.dataId,
+                api_key: apiKey,
+                model: model
+            })
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+
+        // 更新状态
+        if (statusEl) {
+            statusEl.innerHTML = '<div class="flex items-center gap-2 py-1"><span class="material-symbols-outlined text-emerald-500 text-lg">check_circle</span><span class="text-xs text-emerald-600 font-bold">AI 整理完成</span></div>';
+        }
+
+        // 显示 AI 分析描述
+        const descEl = document.getElementById('llm-description');
+        const descText = document.getElementById('llm-desc-text');
+        const tablesList = document.getElementById('llm-tables-list');
+        if (descEl && data.description) {
+            descEl.hidden = false;
+            if (descText) descText.textContent = data.description;
+            if (tablesList && data.tables_found && data.tables_found.length > 0) {
+                tablesList.innerHTML = '<div class="font-bold text-slate-600 mb-1">检测到的表块:</div>' +
+                    data.tables_found.map(t =>
+                        `<div class="flex items-center gap-1 ml-2"><span class="text-blue-400">•</span>${t.name || '未命名'} <span class="text-slate-400">(${t.row_range || t.location || ''})</span></div>`
+                    ).join('');
+            }
+        }
+
+        showReshapeResult(data);
+
+    } catch (err) {
+        showToast('AI 整理失败: ' + err.message, 'error');
+        if (statusEl) {
+            statusEl.innerHTML = `<p class="text-xs text-red-500 text-center py-2">${err.message}</p>`;
+        }
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<span class="material-symbols-outlined text-lg">auto_fix_high</span> 一键 AI 智能整理';
+        }
+    }
+}
+window.executeLlmTidy = executeLlmTidy;
 
 // Start
 document.addEventListener('DOMContentLoaded', init);
