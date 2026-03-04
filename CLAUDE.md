@@ -3,6 +3,24 @@
 本文件为 Claude Code (claude.ai/code) 在本仓库中工作时提供指导。
 请始终使用简体中文与我对话，并在回答时保持专业、简洁。
 
+## ⚠️ 跨账号共享进度系统（必须遵守）
+
+**每次新会话启动时，必须先读取以下两个文件恢复上下文：**
+- `.sisyphus/progress.md` — 任务完成记录（所有 Agent 和 Codex 共写）
+- `.sisyphus/requirements.md` — 任务需求记录
+
+**每次完成任务后，必须追加记录到这两个文件。** 格式：
+```
+时间 | Agent | Session | Task
+YYYY-MM-DD HH:mm:ss | Antigravity/Codex | 会话标识 | 任务标题
+- 状态：completed/in_progress/blocked
+- 已完成：具体完成内容
+- 阻塞：问题描述
+- 下一步：建议
+```
+
+这是跨账号、跨 Agent 的唯一共享上下文，替代 PROJECT_PROGRESS.md。
+
 ## 项目概述
 
 这是一个基于 Flask 的 Web 数据分析应用，专为非编程背景的研究人员设计。提供多因子方差分析、LSD 多重比较、PCA 主成分分析、聚类分析等功能，支持 Excel 导出。

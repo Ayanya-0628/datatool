@@ -31,3 +31,18 @@
 2026-03-04 23:20:00 | Codex(GPT-5) | 2026-03-04-04 | 双擎逻辑研发与主分支工作区存档
 - 当前需求：基于 /tmp/codex_dual_engine.md 实现 SmartTidy 优先 + LLM 兜底的 /api/llm_tidy，并完成存档提交
 - 需求边界：保持前端返回结构兼容；本地解析失败时按参数调用 analyze_and_transform；更新 CHANGELOG 与 .sisyphus 记录
+
+时间 | Agent | Session | Task
+2026-03-05 00:01:37 | Codex(GPT-5) | 2026-03-04-05 | 更新全局配置skill引用codex-delegate→brain-and-hands
+- 当前需求：读取 /tmp/codex_instruction.md 并彻底完成全局配置中 skill 引用更新
+- 需求边界：检查并更新 opencode-global-config 与 E:\AntiAPP 中的 codex-delegate 引用及指定描述
+
+时间 | Agent | Session | Task
+2026-03-05 00:10:37 | Codex(GPT-5) | 2026-03-05-01 | 更新GEMINI.md中codex-delegate→brain-and-hands引用
+- 当前需求：阅读 /tmp/codex_instruction.md 并执行精确替换任务
+- 需求边界：仅修改 C:\Users\16342\.gemini\GEMINI.md 指定2处文本；追加 .sisyphus 记录
+
+时间 | Agent | Session | Task
+2026-03-05 00:20:33 | Codex(GPT-5) | 2026-03-05-02 | 读取/tmp/codex_instruction.md并执行存档提交
+- 当前需求：按指令完整执行“存档”流程（检查改动、提交代码、更新CHANGELOG、记录.sisyphus）
+- 需求边界：基于当前工作区改动生成提交信息；在 CHANGELOG 顶部追加本次归档说明；保持 .sisyphus 记录追加式写入

@@ -51,3 +51,24 @@
 - 测试结果：python -m pytest -q tests/test_smart_tidy_interleaved.py 通过（3 passed）
 - 阻塞：无
 - 下一步：执行 git add . 与 commit，完成当前工作区存档
+
+时间 | Agent | Session | Task
+2026-03-05 00:01:37 | Codex(GPT-5) | 2026-03-04-05 | 更新全局配置skill引用codex-delegate→brain-and-hands
+- 状态：completed
+- 已完成：更新 c:\Users\16342\Desktop\BaiduSyncdisk\APP\学生量化考核\repo_codex_config\opencode-global-config\skills\brain-and-hands\SKILL.md 的 description；全量检索确认 opencode-global-config 与 E:\AntiAPP 均无 codex-delegate 残留引用
+- 阻塞：无
+- 下一步：无
+
+时间 | Agent | Session | Task
+2026-03-05 00:10:37 | Codex(GPT-5) | 2026-03-05-01 | 更新GEMINI.md中codex-delegate→brain-and-hands引用
+- 状态：completed
+- 已完成：修改 C:\Users\16342\.gemini\GEMINI.md 中2处引用
+- 阻塞：无
+- 下一步：无
+
+时间 | Agent | Session | Task
+2026-03-05 00:20:33 | Codex(GPT-5) | 2026-03-05-02 | 存档项目进度
+- 状态：completed
+- 已完成：读取 /tmp/codex_instruction.md 并执行 git status/git diff 检查；更新 CHANGELOG.md 顶部记录（含多子表智能整理重构与双引擎架构接入）；完成本轮 .sisyphus 需求与进度追加记录，准备存档提交
+- 阻塞：无
+- 下一步：无
