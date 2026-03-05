@@ -7,7 +7,7 @@
     <title>数据分析工具 Pro</title>
 
     <!-- Old CSS -->
-    <link rel="stylesheet" href="/static/style.css?v=43">
+    <link rel="stylesheet" href="/static/style.css?v=44">
 
     <!-- Google Fonts & Tailwind -->
     <link href="https://fonts.googleapis.com" rel="preconnect" />
@@ -483,130 +483,147 @@
                     </div>
                 </div>
 
-                <!-- Reshape Section (AI Only) -->
-                <div id="reshape-section" hidden class="flex flex-col p-6 h-full overflow-hidden">
-                    <!-- Header -->
-                    <div class="flex items-center justify-between mb-4">
-                        <div class="flex items-center gap-3">
-                            <div
-                                class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-md">
-                                <span class="material-symbols-outlined text-xl">auto_fix_high</span>
+                <!-- Reshape Section (Redesigned to match standalone ExcelTidy style) -->
+                <div id="reshape-section" hidden class="flex h-full overflow-hidden"
+                    style="background:radial-gradient(circle at 8% 12%,#e8eeff 0%,#f8f9ff 42%,#eef3ff 100%);">
+                    <!-- Left Config Panel (Glass style) -->
+                    <div class="w-80 shrink-0 flex flex-col gap-3 p-4 overflow-y-auto"
+                        style="background:rgba(255,255,255,.75);backdrop-filter:blur(8px);border-right:1px solid rgba(255,255,255,.6);">
+                        <!-- Panel Title -->
+                        <div class="mb-1">
+                            <div class="flex items-center gap-2 mb-1">
+                                <div class="flex h-9 w-9 items-center justify-center rounded-xl text-white shadow-md"
+                                    style="background:linear-gradient(135deg,#4f7cff,#6a5cff);">
+                                    <span class="material-symbols-outlined text-xl">auto_fix_high</span>
+                                </div>
+                                <div>
+                                    <h2 class="text-base font-bold text-slate-800">智能数据整理</h2>
+                                    <p class="text-xs text-slate-500">自动识别 Excel 复杂表结构</p>
+                                </div>
                             </div>
-                            <div>
-                                <h2 class="text-lg font-bold text-slate-900">AI 智能整理</h2>
-                                <p class="text-xs text-slate-500">自动识别复杂 Excel 表结构，一键转为分析用格式</p>
+                        </div>
+
+                        <!-- AI Info Card -->
+                        <div
+                            class="rounded-xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-blue-50 p-3.5 shadow-sm">
+                            <div class="flex items-center gap-2 mb-2">
+                                <span class="material-symbols-outlined text-indigo-600 text-xl">smart_toy</span>
+                                <span class="text-sm font-bold text-indigo-800">DeepSeek V3</span>
+                            </div>
+                            <p class="text-xs text-indigo-700 leading-relaxed">
+                                自动识别合并单元格、多行表头、多区域交错数据，合并所有时期与指标生成标准分析宽表。
+                            </p>
+                        </div>
+
+                        <!-- Hidden API Config -->
+                        <div style="display: none;">
+                            <input type="password" id="llm-api-key"
+                                value="">
+                            <select id="llm-model">
+                                <option value="deepseek-ai/DeepSeek-V3" selected>DeepSeek V3</option>
+                            </select>
+                        </div>
+
+                        <!-- Execute Button (Gradient style matching ExcelTidy) -->
+                        <button id="btn-llm-tidy" onclick="executeLlmTidy()"
+                            class="w-full flex items-center justify-center gap-2 py-3.5 px-4 text-white font-semibold rounded-xl shadow-lg transition-all hover:shadow-xl active:scale-[0.98]"
+                            style="background:linear-gradient(135deg,#4f7cff,#6a5cff);">
+                            <span class="material-symbols-outlined text-xl">auto_fix_high</span>
+                            一键智能整理
+                        </button>
+
+                        <!-- Status Card -->
+                        <div class="rounded-xl border border-indigo-100 bg-white/90 p-3 shadow-sm">
+                            <div class="text-xs text-slate-500 mb-1">状态</div>
+                            <div id="smart-scan-status">
+                                <p class="text-sm font-medium text-slate-700">等待上传后点击开始</p>
+                            </div>
+                        </div>
+
+                        <!-- LLM Description (shown after execution) -->
+                        <div id="llm-description" hidden
+                            class="rounded-xl border border-indigo-100 bg-white/90 shadow-sm overflow-hidden">
+                            <div class="p-3 bg-indigo-50/60 border-b border-indigo-100">
+                                <span class="text-sm font-bold text-indigo-800">AI 分析结果</span>
+                            </div>
+                            <div class="p-3">
+                                <p id="llm-desc-text" class="text-xs text-slate-600 leading-relaxed"></p>
+                                <div id="llm-tables-list" class="mt-2 text-xs text-slate-500"></div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Content: Left Config + Right Preview -->
-                    <div class="flex gap-4 flex-1 overflow-hidden">
-                        <!-- Left Config -->
-                        <div class="w-80 shrink-0 flex flex-col gap-3 overflow-y-auto">
-                            <!-- AI Info Card -->
-                            <div
-                                class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-200 shadow-sm p-4">
-                                <div class="flex items-center gap-2 mb-2">
-                                    <span class="material-symbols-outlined text-blue-600 text-2xl">smart_toy</span>
-                                    <span class="text-base font-bold text-blue-800">DeepSeek V3</span>
-                                </div>
-                                <p class="text-xs text-blue-700 leading-relaxed">
-                                    自动识别合并单元格、多行表头、多区域交错数据，
-                                    合并所有时期与指标生成标准分析宽表。
-                                </p>
-                            </div>
-
-                            <!-- Hidden API Config -->
-                            <div style="display: none;">
-                                <input type="password" id="llm-api-key"
-                                    value="">
-                                <select id="llm-model">
-                                    <option value="deepseek-ai/DeepSeek-V3" selected>DeepSeek V3</option>
-                                </select>
-                            </div>
-
-                            <!-- Execute Button -->
-                            <button id="btn-llm-tidy" onclick="executeLlmTidy()"
-                                class="w-full flex items-center justify-center gap-2 px-3 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-sm font-bold rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all shadow-md">
-                                <span class="material-symbols-outlined text-lg">auto_fix_high</span>
-                                一键 AI 智能整理
+                    <!-- Right Data Area (Full tabs view matching ExcelTidy) -->
+                    <div class="flex-1 flex flex-col min-w-0 overflow-hidden p-4">
+                        <!-- View Tabs (same style as standalone) -->
+                        <div class="flex gap-1 rounded-xl p-1 mb-3 shrink-0" style="background:#f1f3f9;">
+                            <button id="reshape-tab-raw"
+                                class="flex-1 inline-flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-sm font-semibold transition-all cursor-pointer text-white shadow-sm"
+                                style="background:#fff;color:#4f7cff;box-shadow:0 1px 4px rgba(0,0,0,.08);"
+                                onclick="switchReshapeTab('raw')">
+                                <span class="material-symbols-outlined text-lg">table_view</span>
+                                原始数据
+                                <span id="reshape-raw-badge"
+                                    class="inline-flex items-center min-w-[20px] h-5 rounded-full text-[10px] font-bold px-1.5"
+                                    style="background:#4f7cff;color:#fff;display:none;"></span>
                             </button>
+                            <button id="reshape-tab-tidy"
+                                class="flex-1 inline-flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-sm font-semibold transition-all cursor-pointer"
+                                style="color:#6b7280;background:transparent;" onclick="switchReshapeTab('tidy')">
+                                <span class="material-symbols-outlined text-lg">auto_fix_high</span>
+                                整理结果
+                                <span id="reshape-tidy-badge"
+                                    class="inline-flex items-center min-w-[20px] h-5 rounded-full text-[10px] font-bold px-1.5"
+                                    style="background:#e0e7ff;color:#4f46e5;display:none;"></span>
+                            </button>
+                        </div>
 
-                            <!-- Status -->
-                            <div id="smart-scan-status"
-                                class="bg-white rounded-xl border border-slate-200 shadow-sm p-3">
-                                <p class="text-xs text-slate-400 text-center py-1">上传 Excel 后点击按钮开始</p>
+                        <!-- Raw Data Panel -->
+                        <div id="reshape-panel-raw" class="flex flex-col flex-1 min-h-0">
+                            <div class="flex items-center justify-between mb-2 shrink-0">
+                                <h3 class="font-semibold text-slate-700 text-sm">原始数据预览</h3>
+                                <div class="flex items-center gap-3">
+                                    <span class="inline-flex items-center gap-1 text-xs text-slate-400">
+                                        <span class="material-symbols-outlined" style="font-size:14px">edit_note</span>
+                                        双击单元格可编辑
+                                    </span>
+                                    <span id="reshape-original-info" class="text-xs text-slate-500"></span>
+                                </div>
                             </div>
-
-                            <!-- LLM Description (shown after execution) -->
-                            <div id="llm-description" hidden
-                                class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                                <div class="p-3 bg-slate-50 border-b border-slate-200">
-                                    <span class="text-sm font-bold text-slate-700">AI 分析结果</span>
-                                </div>
-                                <div class="p-3">
-                                    <p id="llm-desc-text" class="text-xs text-slate-600 leading-relaxed"></p>
-                                    <div id="llm-tables-list" class="mt-2 text-xs text-slate-500"></div>
-                                </div>
+                            <div id="reshape-original-table"
+                                class="flex-1 min-h-0 overflow-auto rounded-xl border border-indigo-100 bg-white shadow-sm">
+                                <p class="text-sm text-slate-400 text-center py-8">上传数据后自动显示预览</p>
                             </div>
                         </div>
 
-                        <!-- Right Preview -->
-                        <div class="flex-1 flex flex-col gap-3 min-w-0 overflow-hidden">
-                            <!-- Original Data Preview -->
-                            <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col"
-                                style="max-height: 35%">
-                                <div
-                                    class="p-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
-                                    <div class="flex items-center gap-2">
-                                        <span
-                                            class="material-symbols-outlined text-slate-500 text-lg">table_chart</span>
-                                        <span class="text-sm font-bold text-slate-700">原始数据预览</span>
-                                    </div>
-                                    <span id="reshape-original-info" class="text-xs text-slate-400"></span>
-                                </div>
-                                <div id="reshape-original-table" class="flex-1 overflow-auto p-0">
-                                    <p class="text-sm text-slate-400 text-center py-8">上传数据后自动显示预览</p>
-                                </div>
-                            </div>
-
-                            <!-- Arrow -->
-                            <div class="flex items-center justify-center py-2 shrink-0">
-                                <div
-                                    class="bg-blue-50 text-blue-600 px-4 py-1.5 rounded-full text-xs font-bold border border-blue-100 flex items-center gap-2">
-                                    <span class="material-symbols-outlined text-sm">arrow_downward</span>
-                                    AI 智能整理
-                                    <span class="material-symbols-outlined text-sm">arrow_downward</span>
+                        <!-- Tidy Result Panel (hidden by default) -->
+                        <div id="reshape-panel-tidy" class="flex-col flex-1 min-h-0" style="display:none;">
+                            <div class="flex items-center justify-between mb-2 shrink-0">
+                                <h3 class="font-semibold text-slate-700 text-sm">整理后数据预览</h3>
+                                <div class="flex items-center gap-2">
+                                    <span class="inline-flex items-center gap-1 text-xs text-slate-400"
+                                        id="reshape-tidy-edit-hint" style="display:none;">
+                                        <span class="material-symbols-outlined" style="font-size:14px">edit_note</span>
+                                        双击可编辑
+                                    </span>
+                                    <span id="reshape-result-info" class="text-xs text-slate-500"></span>
+                                    <button id="btn-reshape-export" hidden
+                                        class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm text-white font-semibold shadow-sm transition-colors"
+                                        style="background:#10b981;">
+                                        <span class="material-symbols-outlined text-base">download</span>
+                                        导出 Excel
+                                    </button>
+                                    <button id="btn-reshape-use" hidden
+                                        class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm text-white font-semibold shadow-sm transition-colors"
+                                        style="background:#7c3aed;">
+                                        <span class="material-symbols-outlined text-base">open_in_new</span>
+                                        用于分析
+                                    </button>
                                 </div>
                             </div>
-
-                            <!-- Result Preview -->
-                            <div
-                                class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col flex-1">
-                                <div
-                                    class="p-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
-                                    <div class="flex items-center gap-2">
-                                        <span
-                                            class="material-symbols-outlined text-emerald-500 text-lg">check_circle</span>
-                                        <span class="text-sm font-bold text-slate-700">转换结果预览</span>
-                                    </div>
-                                    <div class="flex items-center gap-2">
-                                        <span id="reshape-result-info" class="text-xs text-slate-400"></span>
-                                        <button id="btn-reshape-export" hidden
-                                            class="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition-colors shadow-sm">
-                                            <span class="material-symbols-outlined text-sm">download</span>
-                                            导出 Excel
-                                        </button>
-                                        <button id="btn-reshape-use" hidden
-                                            class="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 text-white rounded-lg text-xs font-bold hover:bg-violet-700 transition-colors shadow-sm">
-                                            <span class="material-symbols-outlined text-sm">open_in_new</span>
-                                            用于分析
-                                        </button>
-                                    </div>
-                                </div>
-                                <div id="reshape-result-table" class="flex-1 overflow-auto p-0">
-                                    <p class="text-sm text-slate-400 text-center py-8">点击「一键 AI 智能整理」查看结果</p>
-                                </div>
+                            <div id="reshape-result-table"
+                                class="flex-1 min-h-0 overflow-auto rounded-xl border border-indigo-100 bg-white shadow-sm">
+                                <p class="text-sm text-slate-400 text-center py-8">点击「一键智能整理」查看结果</p>
                             </div>
                         </div>
                     </div>
@@ -730,10 +747,14 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=43"></script>
+    <script src="/static/app.js?v=44"></script>
     <script>
+        // 仅在独立桌面模式(打包EXE)下关闭页面时关闭服务器
+        // 开发模式下刷新页面不应终止服务
         window.addEventListener('beforeunload', function () {
-            navigator.sendBeacon('/api/shutdown');
+            if (location.port === '5678') {
+                navigator.sendBeacon('/api/shutdown');
+            }
         });
 
         // Setup simple tab button toggling CSS classes

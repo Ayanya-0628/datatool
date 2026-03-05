@@ -1004,3 +1004,50 @@ th {
 .mt-3 { margin-top: 16px; }
 .flex-grow { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 [hidden] { display: none !important; }
+
+/* ===== 单元格编辑样式 ===== */
+.editable-cell {
+    cursor: cell;
+    position: relative;
+    transition: background-color 0.15s ease;
+}
+
+.editable-cell:hover {
+    background-color: #eff6ff !important;
+    outline: 1px dashed #93c5fd;
+    outline-offset: -1px;
+}
+
+.editable-cell.cell-editing {
+    background-color: #ffffff !important;
+    outline: 2px solid #3b82f6;
+    outline-offset: -1px;
+    padding: 2px 4px !important;
+    z-index: 5;
+}
+
+.editable-cell.cell-save-success {
+    animation: cellSaveFlash 0.8s ease;
+}
+
+.editable-cell.cell-save-error {
+    background-color: #fef2f2 !important;
+    outline: 1px solid #fca5a5;
+}
+
+@keyframes cellSaveFlash {
+    0% { background-color: #dcfce7; }
+    100% { background-color: transparent; }
+}
+
+.cell-edit-input {
+    width: 100%;
+    border: none !important;
+    outline: none !important;
+    background: transparent !important;
+    font-size: inherit;
+    font-family: inherit;
+    padding: 0 !important;
+    margin: 0 !important;
+    color: inherit;
+}
