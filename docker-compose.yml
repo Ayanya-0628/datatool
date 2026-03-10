@@ -1,0 +1,21 @@
+version: "3.8"
+
+services:
+  # SlyLab 数据分析应用
+  slylab:
+    build: .
+    container_name: slylab-app
+    restart: always
+    environment:
+      - MPLBACKEND=Agg
+    expose:
+      - "7860"  # 只在 Docker 内部网络暴露，不映射到宿主机
+
+  # Cloudflare Tunnel — 自动创建公网隧道，无需开放任何入站端口
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: slylab-tunnel
+    restart: always
+    command: tunnel --no-autoupdate --url http://slylab:7860
+    depends_on:
+      - slylab
