@@ -1,24 +1,24 @@
-import sys
+﻿import sys
 import os
 import pandas as pd
 import numpy as np
 
-# Add AntiAPP to path to import its modules
-antiapp_path = r"E:\AntiAPP"
-sys.path.append(antiapp_path)
+# Add project root to path to import its modules
+SlyLab_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(SlyLab_path)
 
-# Change working directory to AntiAPP
-os.chdir(antiapp_path)
+# Change working directory to SlyLab
+os.chdir(SlyLab_path)
 
 try:
     from app import run_analysis, sanitize_dataframe
 except ImportError as e:
-    print(f"Error importing AntiAPP: {e}")
+    print(f"Error importing SlyLab: {e}")
     sys.exit(1)
 
 # Path to the data file
 file_path = r'C:\Users\16342\Desktop\BaiduSyncdisk\博士\2023-2024苏涛再生稻试验\产量文章\合并图\2024芽长芽重数据分析7D.xlsx'
-output_path = r'C:\Users\16342\Desktop\BaiduSyncdisk\博士\2023-2024苏涛再生稻试验\产量文章\合并图\2024芽长芽重数据分析7D_AntiAPP分析结果.xlsx'
+output_path = r'C:\Users\16342\Desktop\BaiduSyncdisk\博士\2023-2024苏涛再生稻试验\产量文章\合并图\2024芽长芽重数据分析7D_SlyLab分析结果.xlsx'
 
 print(f"Reading file: {file_path}")
 try:
@@ -40,7 +40,7 @@ print(f"Factors: {factors}")
 print(f"Targets: {targets}")
 
 # Run Analysis
-print("Running analysis using AntiAPP core logic...")
+print("Running analysis using SlyLab core logic...")
 results, valid_targets = run_analysis(df, factors, targets)
 
 # Save results to Excel
@@ -79,3 +79,6 @@ try:
 except Exception as e:
     print(f"Error writing file: {e}")
     sys.exit(1)
+
+
+

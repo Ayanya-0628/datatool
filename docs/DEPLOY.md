@@ -1,9 +1,9 @@
-# 数据分析工具 - 部署指南
+﻿# SlyLab - 部署指南
 
 ## 快速启动（本地运行）
 
 ```bash
-cd e:\AntiAPP
+cd e:\SlyLab
 
 # 安装依赖
 pip install -r requirements.txt
@@ -79,3 +79,4 @@ python -c "from app import app; app.run(host='0.0.0.0', port=5000)"
 - 上传的数据文件会在1小时后自动删除
 - 最大支持50MB文件
 - 建议使用Chrome/Edge浏览器
+

@@ -21,7 +21,7 @@ except ImportError:
 
 # Scipy imports for dendrogram
 try:
-    from scipy.cluster.hierarchy import dendrogram, linkage
+    from scipy.cluster.hierarchy import dendrogram, linkage, to_tree
     from scipy.spatial.distance import pdist
     from scipy.stats import pearsonr
     HAS_SCIPY = True
@@ -32,6 +32,9 @@ except ImportError:
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
+from matplotlib.patches import Patch
+
 
 # 字体配置
 plt.rcParams['font.sans-serif'] = ['SimSun', 'SimHei', 'Microsoft YaHei', 'DejaVu Sans']
@@ -41,6 +44,11 @@ plt.rcParams['axes.unicode_minus'] = False
 
 class ClusterAnalyzer:
     """聚类分析器"""
+
+    CLUSTER_COLORS = [
+        '#E74C3C', '#3498DB', '#2ECC71', '#F39C12', '#9B59B6',
+        '#1ABC9C', '#E67E22', '#34495E', '#E91E63', '#00BCD4',
+    ]
     
     def __init__(self, df, features, factors=None, target_configs=None):
         """
@@ -218,6 +226,16 @@ class ClusterAnalyzer:
             self.linkage_matrix = linkage(self.scaled_data, method=linkage_method)
         
         return self
+
+    @staticmethod
+    def _encode_plot(fig, format='png', dpi=150):
+        buffer = BytesIO()
+        fig.savefig(buffer, format=format, dpi=dpi, bbox_inches='tight', facecolor='white')
+        buffer.seek(0)
+        plt.close(fig)
+        if format == 'svg':
+            return {'data': buffer.getvalue().decode('utf-8'), 'format': 'svg'}
+        return {'data': base64.b64encode(buffer.getvalue()).decode('utf-8'), 'format': format}
     
     def get_elbow_data(self, max_k=10):
         """
@@ -560,15 +578,7 @@ class ClusterAnalyzer:
         plt.colorbar(im, cax=cbar_ax, label='Z-Score')
 
         # 保存
-        buffer = BytesIO()
-        fig.savefig(buffer, format=format, dpi=150, bbox_inches='tight', facecolor='white')
-        buffer.seek(0)
-        plt.close(fig)
-
-        if format == 'svg':
-            return {'data': buffer.getvalue().decode('utf-8'), 'format': 'svg'}
-        else:
-            return {'data': base64.b64encode(buffer.getvalue()).decode('utf-8'), 'format': format}
+        return self._encode_plot(fig, format=format, dpi=150)
 
     def plot_corr_heatmap(self, format='png'):
         """
@@ -715,15 +725,246 @@ class ClusterAnalyzer:
         plt.colorbar(im, cax=cbar_ax, label='Correlation')
 
         # 保存
-        buffer = BytesIO()
-        fig.savefig(buffer, format=format, dpi=150, bbox_inches='tight', facecolor='white')
-        buffer.seek(0)
-        plt.close(fig)
+        return self._encode_plot(fig, format=format, dpi=150)
 
-        if format == 'svg':
-            return {'data': buffer.getvalue().decode('utf-8'), 'format': 'svg'}
+    def _get_plot_linkage(self):
+        """获取或计算用于绘图的 linkage 矩阵"""
+        if self.linkage_matrix is not None:
+            return self.linkage_matrix
+        method = getattr(self, 'linkage_method', 'ward')
+        self.linkage_matrix = linkage(self.scaled_data, method=method)
+        return self.linkage_matrix
+
+    def _get_sample_labels(self):
+        """获取样本标签列表（优先使用因子列组合，否则用行索引）"""
+        if self.factors:
+            valid = [c for c in self.factors if c in self.df.columns]
+            if valid:
+                return self.df[valid].astype(str).agg('_'.join, axis=1).tolist()
+        return [str(i) for i in range(len(self.df))]
+
+    @staticmethod
+    def _normalize_display_frame(df):
+        """将 DataFrame 每列归一化到 [0, 1] 用于环形热图显示"""
+        result = df.copy()
+        for col in result.columns:
+            cmin = result[col].min()
+            cmax = result[col].max()
+            if cmax > cmin:
+                result[col] = (result[col] - cmin) / (cmax - cmin)
+            else:
+                result[col] = 0.5
+        return result
+
+    def plot_circular_heatmap(self, format='png'):
+        """
+        绘制环形聚类热图，复刻 R 脚本中的“圆形树状图 + 外环热图”表现。
+        """
+        if self.labels_ is None:
+            raise ValueError("请先执行聚类分析")
+        if not HAS_SCIPY:
+            return {'error': '绘制环形聚类热图需要 scipy 库'}
+
+        row_linkage = self._get_plot_linkage()
+        dendro_info = dendrogram(row_linkage, no_plot=True)
+        sample_order = dendro_info['leaves']
+        sample_labels = self._get_sample_labels()
+        ordered_labels = [sample_labels[idx] for idx in sample_order]
+        ordered_clusters = (self.labels_[sample_order] + 1).astype(int)
+
+        display_frame = self._normalize_display_frame(self.data_matrix[self.valid_features])
+        ordered_values = display_frame.iloc[sample_order]
+
+        n_samples = len(sample_order)
+        n_features = len(self.valid_features)
+        if n_samples < 3:
+            raise ValueError("样本数过少，无法绘制环形聚类热图")
+
+        fig = plt.figure(figsize=(10, 10))
+        ax = fig.add_subplot(111, projection='polar')
+        ax.set_theta_zero_location('E')
+        ax.set_theta_direction(-1)
+        ax.grid(False)
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.spines['polar'].set_visible(False)
+
+        gap_radians = np.deg2rad(38)
+        span = 2 * np.pi - gap_radians
+        start_angle = gap_radians / 2
+        angle_step = span / n_samples
+        ordered_angles = [start_angle + (i + 0.5) * angle_step for i in range(n_samples)]
+        leaf_angle_map = {sample_idx: ordered_angles[pos] for pos, sample_idx in enumerate(sample_order)}
+
+        tree = to_tree(row_linkage, rd=False)
+        max_dist = max(float(tree.dist), 1e-9)
+        tree_inner_radius = 0.16
+        tree_outer_radius = 0.58
+        cluster_ring_bottom = tree_outer_radius + 0.02
+        cluster_ring_height = 0.035
+        feature_ring_inner = cluster_ring_bottom + cluster_ring_height + 0.02
+        feature_ring_width = min(0.07, 0.34 / max(n_features, 1))
+        label_radius = feature_ring_inner + n_features * feature_ring_width + 0.12
+        legend_theta = 0.0
+
+        node_angle_cache = {}
+        leaf_count_cache = {}
+        node_groups_cache = {}
+        cluster_color_map = {
+            idx + 1: self.CLUSTER_COLORS[idx % len(self.CLUSTER_COLORS)]
+            for idx in range(max(int(self.n_clusters or 0), 1))
+        }
+
+        def get_leaf_count(node):
+            if node.id in leaf_count_cache:
+                return leaf_count_cache[node.id]
+            if node.is_leaf():
+                leaf_count_cache[node.id] = 1
+            else:
+                leaf_count_cache[node.id] = get_leaf_count(node.left) + get_leaf_count(node.right)
+            return leaf_count_cache[node.id]
+
+        def get_node_angle(node):
+            if node.id in node_angle_cache:
+                return node_angle_cache[node.id]
+            if node.is_leaf():
+                node_angle_cache[node.id] = leaf_angle_map[node.id]
+            else:
+                left_angle = get_node_angle(node.left)
+                right_angle = get_node_angle(node.right)
+                left_count = get_leaf_count(node.left)
+                right_count = get_leaf_count(node.right)
+                node_angle_cache[node.id] = (
+                    left_angle * left_count + right_angle * right_count
+                ) / (left_count + right_count)
+            return node_angle_cache[node.id]
+
+        def get_node_radius(node):
+            if node.is_leaf():
+                return tree_outer_radius
+            return tree_outer_radius - (float(node.dist) / max_dist) * (tree_outer_radius - tree_inner_radius)
+
+        def get_node_groups(node):
+            if node.id in node_groups_cache:
+                return node_groups_cache[node.id]
+            if node.is_leaf():
+                node_groups_cache[node.id] = {int(self.labels_[node.id]) + 1}
+            else:
+                node_groups_cache[node.id] = get_node_groups(node.left) | get_node_groups(node.right)
+            return node_groups_cache[node.id]
+
+        def get_branch_color(node):
+            groups = get_node_groups(node)
+            if len(groups) == 1:
+                return cluster_color_map[next(iter(groups))]
+            return '#222222'
+
+        def draw_tree(node):
+            if node.is_leaf():
+                return
+
+            left_node = node.left
+            right_node = node.right
+            node_radius = get_node_radius(node)
+            left_theta = get_node_angle(left_node)
+            right_theta = get_node_angle(right_node)
+
+            theta_arc = np.linspace(left_theta, right_theta, 120)
+            ax.plot(theta_arc, np.full_like(theta_arc, node_radius), color=get_branch_color(node), linewidth=1.0, alpha=0.95)
+            ax.plot([left_theta, left_theta], [get_node_radius(left_node), node_radius], color=get_branch_color(left_node), linewidth=1.0, alpha=0.95)
+            ax.plot([right_theta, right_theta], [get_node_radius(right_node), node_radius], color=get_branch_color(right_node), linewidth=1.0, alpha=0.95)
+
+            draw_tree(left_node)
+            draw_tree(right_node)
+
+        draw_tree(tree)
+
+        for theta, cluster_id in zip(ordered_angles, ordered_clusters):
+            ax.bar(
+                theta,
+                cluster_ring_height,
+                width=angle_step * 0.98,
+                bottom=cluster_ring_bottom,
+                color=cluster_color_map[int(cluster_id)],
+                edgecolor='none',
+                align='center',
+            )
+
+        cmap = mcolors.LinearSegmentedColormap.from_list('circular_cluster_heatmap', ['#2166AC', '#FFFFFF', '#B2182B'])
+        norm = mcolors.TwoSlopeNorm(vmin=0.0, vcenter=0.5, vmax=1.0)
+
+        for feature_idx, feature_name in enumerate(self.valid_features):
+            ring_bottom = feature_ring_inner + feature_idx * feature_ring_width
+            values = ordered_values[feature_name].to_numpy(dtype=float)
+            colors = [cmap(norm(value)) for value in values]
+            ax.bar(
+                ordered_angles,
+                np.full(n_samples, feature_ring_width * 0.96),
+                width=angle_step * 0.98,
+                bottom=ring_bottom,
+                color=colors,
+                edgecolor='white',
+                linewidth=0.25,
+                align='center',
+            )
+            ax.text(
+                legend_theta,
+                ring_bottom + feature_ring_width * 0.5,
+                feature_name,
+                ha='left',
+                va='center',
+                fontsize=10,
+                fontweight='bold',
+                color='#334155',
+            )
+
+        show_labels = n_samples <= 80
+        label_font_size = 10 if n_samples <= 24 else 8 if n_samples <= 40 else 6
+        if show_labels:
+            for theta, label, cluster_id in zip(ordered_angles, ordered_labels, ordered_clusters):
+                theta_deg = np.degrees(theta)
+                rotation = theta_deg - 90
+                ha = 'left'
+                if 90 < theta_deg < 270:
+                    rotation += 180
+                    ha = 'right'
+                ax.text(
+                    theta,
+                    label_radius,
+                    label,
+                    rotation=rotation,
+                    rotation_mode='anchor',
+                    ha=ha,
+                    va='center',
+                    fontsize=label_font_size,
+                    color=cluster_color_map[int(cluster_id)],
+                )
         else:
-            return {'data': base64.b64encode(buffer.getvalue()).decode('utf-8'), 'format': format}
+            ax.text(
+                legend_theta,
+                label_radius,
+                f'样本数 {n_samples}，为保证可读性已隐藏外圈标签',
+                ha='left',
+                va='center',
+                fontsize=10,
+                color='#475569',
+            )
+
+        legend_handles = [
+            Patch(facecolor=cluster_color_map[idx + 1], edgecolor='none', label=f'聚类 {idx + 1}')
+            for idx in range(int(self.n_clusters or 0))
+        ]
+        if legend_handles:
+            fig.legend(handles=legend_handles, loc='upper right', bbox_to_anchor=(0.98, 0.98), frameon=False, title='聚类分组')
+
+        cax = fig.add_axes([0.84, 0.14, 0.02, 0.22])
+        colorbar = plt.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap), cax=cax)
+        colorbar.set_label('指标相对水平', fontsize=10)
+        colorbar.ax.tick_params(labelsize=9)
+
+        ax.set_ylim(0, label_radius + 0.14)
+        fig.suptitle('环形聚类热图', fontsize=16, fontweight='bold', y=0.98)
+        return self._encode_plot(fig, format=format, dpi=120)
 
     def export_to_csv(self):
         """

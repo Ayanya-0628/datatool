@@ -1,4 +1,4 @@
-# 桌面版架构 (Desktop)
+﻿# 桌面版架构 (Desktop)
 
 **最后更新:** 2026-01-25
 **入口文件:** `launcher.py` (175 行)
@@ -144,7 +144,7 @@ a = Analysis(
 
 exe = EXE(
     pyz, a.scripts,
-    name='数据分析工具',
+    name='SlyLab',
     console=False,  # 无控制台窗口
     icon='static/favicon.ico',
 )
@@ -154,16 +154,16 @@ exe = EXE(
 
 ```ini
 [Setup]
-AppName=数据分析工具
+AppName=SlyLab
 AppVersion=2.0
-DefaultDirName={autopf}\DataAnalysisTool
-OutputBaseFilename=DataAnalysisTool_Setup
+DefaultDirName={autopf}\SlyLab
+OutputBaseFilename=SlyLab_Setup
 
 [Files]
-Source: "dist\数据分析工具\*"; DestDir: "{app}"; Flags: recursesubdirs
+Source: "dist\SlyLab\*"; DestDir: "{app}"; Flags: recursesubdirs
 
 [Icons]
-Name: "{commondesktop}\数据分析工具"; Filename: "{app}\数据分析工具.exe"
+Name: "{commondesktop}\SlyLab"; Filename: "{app}\SlyLab.exe"
 ```
 
 ## 数据存储路径
@@ -173,7 +173,7 @@ def get_app_data_dir():
     """获取应用数据目录 (避免权限问题)"""
     home = os.path.expanduser("~")
     if sys.platform == "win32":
-        return os.path.join(home, "AppData", "Local", "DataAnalysisTool")
+        return os.path.join(home, "AppData", "Local", "SlyLab")
     else:
         return os.path.join(home, ".data_analysis_tool")
 ```
@@ -226,12 +226,13 @@ iscc setup.iss
 
 ```
 dist/
-└── 数据分析工具/
-    ├── 数据分析工具.exe
+└── SlyLab/
+    ├── SlyLab.exe
     ├── templates/
     ├── static/
     └── [Qt/Python 运行时]
 
 Output/
-└── DataAnalysisTool_Setup.exe  # 安装程序
+└── SlyLab_Setup.exe  # 安装程序
 ```
+

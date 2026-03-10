@@ -1,6 +1,6 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """
-数据分析工具 - 启动器（无窗口）
+SlyLab - 启动器（无窗口）
 启动 Flask 后直接打开系统浏览器；仅在点击「选择目录」时弹出文件夹选择框。
 关闭浏览器标签页时会尝试自动结束服务。
 """
@@ -98,7 +98,7 @@ def main():
     flask_thread.start()
 
     qt_app = QApplication(sys.argv)
-    qt_app.setApplicationName("数据分析工具")
+    qt_app.setApplicationName("SlyLab")
 
     helper = DialogHelper()
     dialog_signal.request_directory.connect(helper.show_directory_dialog)
@@ -114,3 +114,4 @@ if __name__ == '__main__':
         error_msg = traceback.format_exc()
         ctypes.windll.user32.MessageBoxW(0, error_msg, "Application Error", 0x10)
         sys.exit(1)
+

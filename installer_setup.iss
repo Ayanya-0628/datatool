@@ -1,10 +1,10 @@
-; Inno Setup 脚本 - 数据分析工具
-; 使用前请先执行: pyinstaller 数据分析工具.spec --clean --noconfirm
-; 将生成 dist\DataAnalysisTool 目录，本脚本会将该目录打包为安装程序
+﻿; Inno Setup 脚本 - SlyLab
+; 使用前请先执行: pyinstaller SlyLab.spec --clean --noconfirm
+; 将生成 dist\SlyLab 目录，本脚本会将该目录打包为安装程序
 
-#define MyAppName "数据分析工具"
-#define MyAppExe "DataAnalysisTool.exe"
-#define MyAppOutput "DataAnalysisTool"
+#define MyAppName "SlyLab"
+#define MyAppExe "SlyLab.exe"
+#define MyAppOutput "SlyLab"
 
 [Setup]
 AppId={{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}
@@ -13,9 +13,9 @@ AppVerName={#MyAppName}
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
-; 安装程序输出：当前目录下的 Output 文件夹，安装包名为 数据分析工具_Setup.exe
+; 安装程序输出：当前目录下的 Output 文件夹，安装包名为 SlyLab_Setup.exe
 OutputDir=Output
-OutputBaseFilename=数据分析工具_Setup
+OutputBaseFilename=SlyLab_Setup
 ; SetupIconFile=static\favicon.ico
 Compression=lzma2/ultra64
 SolidCompression=yes
@@ -35,12 +35,15 @@ Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: 
 Source: "dist\{#MyAppOutput}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"; Comment: "启动数据分析工具"
+Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"; Comment: "启动 SlyLab"
 Name: "{group}\卸载 {#MyAppName}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"; Tasks: desktopicon; Comment: "启动数据分析工具"
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"; Tasks: desktopicon; Comment: "启动 SlyLab"
 
 [Run]
 Filename: "{app}\{#MyAppExe}"; Description: "立即运行 {#MyAppName}"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
 Type: dirifempty; Name: "{app}"
+
+
+

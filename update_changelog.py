@@ -1,7 +1,7 @@
-import os
+﻿import os
 import datetime
 
-changelog_path = 'e:/AntiAPP/CHANGELOG.md'
+changelog_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'CHANGELOG.md')
 if os.path.exists(changelog_path):
     with open(changelog_path, 'r', encoding='utf-8', errors='ignore') as f:
         content = f.read()
@@ -18,3 +18,4 @@ new_entry = f"""## {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}
 
 with open(changelog_path, 'w', encoding='utf-8') as f:
     f.write(new_entry + content)
+

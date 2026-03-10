@@ -1,4 +1,4 @@
-# AGENTS.md instructions for E:\AntiAPP
+﻿# AGENTS.md instructions for E:\SlyLab
 
 ## 版本记录规范
 
@@ -30,3 +30,4 @@
 **触发指令**: 当提及 "历史" 或 "记录" 时
 
 - **显示记录**: 显示最近 5 次提交的简要信息
+

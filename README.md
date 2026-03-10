@@ -1,5 +1,5 @@
----
-title: 数据分析工具
+﻿---
+title: SlyLab
 emoji: 📊
 colorFrom: blue
 colorTo: indigo
@@ -8,9 +8,9 @@ pinned: false
 license: Apache-2.0
 ---
 
-# 📊 数据分析工具 (Python Web 版)
+# 📊 SlyLab (Python Web 版)
 
-这是一个基于 Web 的简易数据分析工具，旨在为非编程背景的研究人员提供便捷的统计分析服务。
+这是一个基于 Web 的简易SlyLab，旨在为非编程背景的研究人员提供便捷的统计分析服务。
 
 ## 🌟 主要功能
 *   **多因子方差分析 (ANOVA)**：支持交互作用分析。
@@ -25,3 +25,5 @@ license: Apache-2.0
 
 ## 👨‍💻 作者
 Developed by [Your Name/Team] for internal research use.
+
+

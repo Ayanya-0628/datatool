@@ -131,7 +131,6 @@ function init() {
     initExport();
     initTabs();
     initSheetModal();
-    initCellEditing();
 }
 
 // ===== Upload Logic =====
@@ -1398,12 +1397,8 @@ async function loadReshapePreview() {
 
         const tableEl = document.getElementById('reshape-original-table');
         if (tableEl && data.preview.length > 0) {
-            renderMiniTable(tableEl, data.preview, { editable: true, storeType: 'data' });
+            renderMiniTable(tableEl, data.preview);
         }
-
-        // Update raw tab badge
-        const rawBadge = document.getElementById('reshape-raw-badge');
-        if (rawBadge) { rawBadge.textContent = `${data.rows}行`; rawBadge.style.display = ''; }
 
         // Reset and render available columns
         reshapeState.meltIdVars = [];
@@ -1550,36 +1545,28 @@ function populatePivotDropdowns() {
     if (currentVal) valSelect.value = currentVal;
 }
 
-function renderMiniTable(containerEl, data, options = {}) {
+function renderMiniTable(containerEl, data) {
     if (!data || data.length === 0) {
         containerEl.innerHTML = '<p class="text-sm text-slate-400 text-center py-4">无数据</p>';
         return;
     }
 
     const cols = Object.keys(data[0]);
-    const editable = options.editable || false;
-    const storeType = options.storeType || 'data'; // 'data' or 'reshape'
-
-    const esc = (v) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
     let html = '<table class="w-full text-xs border-collapse">';
     html += '<thead class="sticky top-0 z-10"><tr>';
     cols.forEach(col => {
-        html += `<th class="px-3 py-2 text-left font-bold text-slate-600 bg-slate-100 border-b border-slate-200 whitespace-nowrap">${esc(col)}</th>`;
+        html += `<th class="px-3 py-2 text-left font-bold text-slate-600 bg-slate-100 border-b border-slate-200 whitespace-nowrap">${col}</th>`;
     });
     html += '</tr></thead><tbody>';
 
-    data.forEach((row, rowIdx) => {
-        const bgClass = rowIdx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50';
+    data.forEach((row, idx) => {
+        const bgClass = idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50';
         html += `<tr class="${bgClass} hover:bg-blue-50/50 transition-colors">`;
-        cols.forEach((col, colIdx) => {
+        cols.forEach(col => {
             const val = row[col];
             const displayVal = val === null || val === undefined ? '' : String(val);
-            if (editable) {
-                html += `<td class="px-3 py-1.5 border-b border-slate-100 whitespace-nowrap text-slate-700 editable-cell" data-row-index="${rowIdx}" data-col-index="${colIdx}" data-col-name="${esc(col)}" data-store-type="${storeType}">${esc(displayVal)}</td>`;
-            } else {
-                html += `<td class="px-3 py-1.5 border-b border-slate-100 whitespace-nowrap text-slate-700">${esc(displayVal)}</td>`;
-            }
+            html += `<td class="px-3 py-1.5 border-b border-slate-100 whitespace-nowrap text-slate-700">${displayVal}</td>`;
         });
         html += '</tr>';
     });
@@ -1587,96 +1574,6 @@ function renderMiniTable(containerEl, data, options = {}) {
     html += '</tbody></table>';
     containerEl.innerHTML = html;
 }
-
-// ===== 单元格编辑逻辑 =====
-let editingCell = null;
-
-function initCellEditing() {
-    // 使用事件委托：监听所有 .editable-cell 的双击事件
-    document.addEventListener('dblclick', function (e) {
-        const cell = e.target.closest('.editable-cell');
-        if (!cell || !state.dataId) return;
-        startCellEdit(cell);
-    });
-}
-
-function startCellEdit(cell) {
-    if (editingCell === cell) return;
-    if (editingCell) finishCellEdit(editingCell, false);
-
-    editingCell = cell;
-    const currentValue = cell.textContent ?? '';
-    cell.classList.add('cell-editing');
-
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.value = currentValue;
-    input.className = 'cell-edit-input';
-    input.style.cssText = 'width:100%;border:none;outline:none;background:transparent;font-size:inherit;font-family:inherit;padding:0;margin:0;';
-
-    cell.textContent = '';
-    cell.appendChild(input);
-    input.focus();
-    input.select();
-
-    input.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter') { e.preventDefault(); finishCellEdit(cell, true); }
-        if (e.key === 'Escape') { e.preventDefault(); cell.textContent = currentValue; cleanupEdit(cell); }
-    });
-    input.addEventListener('blur', function () {
-        // 延迟检查，防止和 Enter 键冲突
-        setTimeout(() => { if (editingCell === cell) finishCellEdit(cell, true); }, 100);
-    });
-}
-
-async function finishCellEdit(cell, shouldSave) {
-    const input = cell.querySelector('input');
-    if (!input) { cleanupEdit(cell); return; }
-
-    const newValue = input.value;
-    const rowIndex = Number(cell.dataset.rowIndex);
-    const colName = cell.dataset.colName;
-    const storeType = cell.dataset.storeType || 'data';
-
-    cell.textContent = newValue;
-    cleanupEdit(cell);
-
-    if (!shouldSave || !state.dataId) return;
-
-    try {
-        const res = await fetch('/api/update_cell', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                data_id: state.dataId,
-                row_index: rowIndex,
-                column_name: colName,
-                new_value: newValue,
-                store_type: storeType
-            })
-        });
-        const data = await res.json();
-        if (data.error) throw new Error(data.error);
-
-        const savedValue = data.updated_value == null ? '' : String(data.updated_value);
-        cell.textContent = savedValue;
-
-        // 保存成功闪烁
-        cell.classList.remove('cell-save-success');
-        void cell.offsetWidth;
-        cell.classList.add('cell-save-success');
-    } catch (err) {
-        showToast('保存失败: ' + err.message, 'error');
-        cell.classList.add('cell-save-error');
-        setTimeout(() => cell.classList.remove('cell-save-error'), 1500);
-    }
-}
-
-function cleanupEdit(cell) {
-    cell.classList.remove('cell-editing');
-    editingCell = null;
-}
-
 
 async function executeReshape() {
     if (!state.dataId) return showToast('请先上传数据', 'error');
@@ -1805,64 +1702,19 @@ async function useReshapeResult() {
 }
 
 // ===== 公共结果渲染 =====
-
-// Reshape tab switcher (matching standalone ExcelTidy style)
-window.switchReshapeTab = function (tab) {
-    const tabRaw = document.getElementById('reshape-tab-raw');
-    const tabTidy = document.getElementById('reshape-tab-tidy');
-    const panelRaw = document.getElementById('reshape-panel-raw');
-    const panelTidy = document.getElementById('reshape-panel-tidy');
-    if (!tabRaw || !tabTidy || !panelRaw || !panelTidy) return;
-
-    const activeStyle = 'background:#fff;color:#4f7cff;box-shadow:0 1px 4px rgba(0,0,0,.08);';
-    const inactiveStyle = 'color:#6b7280;background:transparent;box-shadow:none;';
-
-    if (tab === 'raw') {
-        tabRaw.style.cssText = activeStyle;
-        tabTidy.style.cssText = inactiveStyle;
-        panelRaw.style.display = 'flex';
-        panelTidy.style.display = 'none';
-        // Update badge styles
-        const rawBadge = document.getElementById('reshape-raw-badge');
-        const tidyBadge = document.getElementById('reshape-tidy-badge');
-        if (rawBadge) { rawBadge.style.background = '#4f7cff'; rawBadge.style.color = '#fff'; }
-        if (tidyBadge) { tidyBadge.style.background = '#e0e7ff'; tidyBadge.style.color = '#4f46e5'; }
-    } else {
-        tabRaw.style.cssText = inactiveStyle;
-        tabTidy.style.cssText = activeStyle;
-        panelRaw.style.display = 'none';
-        panelTidy.style.display = 'flex';
-        const rawBadge = document.getElementById('reshape-raw-badge');
-        const tidyBadge = document.getElementById('reshape-tidy-badge');
-        if (rawBadge) { rawBadge.style.background = '#e0e7ff'; rawBadge.style.color = '#4f46e5'; }
-        if (tidyBadge) { tidyBadge.style.background = '#4f7cff'; tidyBadge.style.color = '#fff'; }
-    }
-};
-
 function showReshapeResult(data) {
     const resultInfo = document.getElementById('reshape-result-info');
     if (resultInfo) resultInfo.textContent = `${data.total_rows} 行 × ${data.columns.length} 列 (显示前 ${data.preview_rows} 行)`;
 
     const resultTable = document.getElementById('reshape-result-table');
     if (resultTable && data.preview.length > 0) {
-        renderMiniTable(resultTable, data.preview, { editable: true, storeType: 'reshape' });
+        renderMiniTable(resultTable, data.preview);
     }
 
     const btnExport = document.getElementById('btn-reshape-export');
     const btnUse = document.getElementById('btn-reshape-use');
     if (btnExport) btnExport.hidden = false;
     if (btnUse) btnUse.hidden = false;
-
-    // Show edit hint on tidy panel
-    const tidyEditHint = document.getElementById('reshape-tidy-edit-hint');
-    if (tidyEditHint) tidyEditHint.style.display = '';
-
-    // Update badges
-    const tidyBadge = document.getElementById('reshape-tidy-badge');
-    if (tidyBadge) { tidyBadge.textContent = `${data.total_rows}行`; tidyBadge.style.display = ''; }
-
-    // Auto switch to tidy tab
-    if (typeof switchReshapeTab === 'function') switchReshapeTab('tidy');
 
     showToast(`转换成功！共 ${data.total_rows} 行 × ${data.columns.length} 列`, 'success');
 }

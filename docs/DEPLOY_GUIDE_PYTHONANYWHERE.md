@@ -1,4 +1,4 @@
-# 🐍 部署到 PythonAnywhere 指南 (Python数据分析工具)
+﻿# 🐍 部署到 PythonAnywhere 指南 (PythonSlyLab)
 
 **状态：✅ 已部署成功**
 **网址：** `https://lyshang.pythonanywhere.com`
@@ -46,3 +46,4 @@ git push
    workon myenv
    pip install -r requirements.txt
    ```
+

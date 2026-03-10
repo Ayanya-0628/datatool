@@ -1,4 +1,4 @@
-{
+﻿{
   "permissions": {
     "allow": [
       "Bash(dir:*)",
@@ -19,10 +19,11 @@
       "Bash(pip install:*)",
       "Bash(\"C:/Program Files \\(x86\\)/Inno Setup 6/ISCC.exe\":*)",
       "Bash(ls:*)",
-      "Bash(cmd /c \"taskkill /F /IM python.exe /T >nul 2>&1 & taskkill /F /IM 数据分析工具.exe /T >nul 2>&1 & rmdir /S /Q e:\\\\AntiAPP\\\\dist & rmdir /S /Q e:\\\\AntiAPP\\\\build\")",
+      "Bash(cmd /c \"taskkill /F /IM python.exe /T >nul 2>&1 & taskkill /F /IM SlyLab.exe /T >nul 2>&1 & rmdir /S /Q dist & rmdir /S /Q build\")",
       "Bash(\"C:\\\\Program Files \\(x86\\)\\\\Inno Setup 6\\\\ISCC.exe\":*)",
       "Bash(pyinstaller:*)"
     ]
   },
   "outputStyle": "default"
 }
+

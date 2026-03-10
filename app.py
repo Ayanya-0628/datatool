@@ -2077,67 +2077,6 @@ def smart_tidy_execute():
 
 
 # =====================================================
-# 单元格编辑 API
-# =====================================================
-
-@app.route('/api/update_cell', methods=['POST'])
-def update_cell():
-    """更新数据中的单元格值（支持 data_store 和 reshape_store）"""
-    data = request.json or {}
-    data_id = data.get('data_id')
-    row_index = data.get('row_index')
-    column_name = data.get('column_name')
-    new_value = data.get('new_value', '')
-    store_type = data.get('store_type', 'data')  # 'data' 或 'reshape'
-
-    if data_id is None or row_index is None or column_name is None:
-        return jsonify({'error': '缺少必要参数'}), 400
-
-    # 选择数据源
-    if store_type == 'reshape':
-        store = reshape_store
-    else:
-        store = data_store
-
-    if data_id not in store:
-        return jsonify({'error': '数据已过期，请重新上传文件'}), 400
-
-    try:
-        df = store[data_id]
-        row_index = int(row_index)
-
-        if row_index < 0 or row_index >= len(df):
-            return jsonify({'error': f'行索引 {row_index} 超出范围 (0-{len(df)-1})'}), 400
-        if column_name not in df.columns:
-            return jsonify({'error': f'列 "{column_name}" 不存在'}), 400
-
-        # 尝试转换数值
-        original_dtype = df[column_name].dtype
-        converted_value = new_value
-        if pd.api.types.is_numeric_dtype(original_dtype):
-            try:
-                if '.' in str(new_value):
-                    converted_value = float(new_value)
-                else:
-                    converted_value = int(new_value) if new_value.strip() else None
-            except (ValueError, TypeError):
-                converted_value = new_value
-
-        df.iloc[row_index, df.columns.get_loc(column_name)] = converted_value
-
-        return jsonify({
-            'success': True,
-            'updated_value': str(converted_value) if converted_value is not None else '',
-            'row_index': row_index,
-            'column_name': column_name
-        })
-
-    except Exception as e:
-        traceback.print_exc()
-        return jsonify({'error': f'更新失败: {str(e)}'}), 500
-
-
-# =====================================================
 # LLM 数据整理 (AI 万能整理) API
 # =====================================================
 
@@ -2273,6 +2212,12 @@ def llm_tidy():
     except Exception as e:
         traceback.print_exc()
         return jsonify({'error': f'双擎整理失败: {str(e)}'}), 500
+
+
+@app.route('/healthz', methods=['GET'])
+def healthz():
+    """轻量健康检查，供启动器轮询。"""
+    return jsonify({'status': 'ok'}), 200
 
 
 @app.route('/api/shutdown', methods=['POST'])

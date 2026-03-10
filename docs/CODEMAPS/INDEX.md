@@ -1,4 +1,4 @@
-# Data Analysis Tool 2.0 - 代码地图索引
+﻿# Data Analysis Tool 2.0 - 代码地图索引
 
 **最后更新:** 2026-01-25
 **版本:** 2.0 (Windows 桌面版 + Web 版)
@@ -84,7 +84,7 @@ JSON 响应 --> 前端渲染表格/图表
 ## 目录结构
 
 ```
-AntiAPP/
+SlyLab/
 ├── app.py                 # Flask 主应用 (1558 行)
 ├── pca_analysis.py        # PCA 分析模块 (651 行)
 ├── clustering.py          # 聚类分析模块 (444 行)
@@ -126,3 +126,4 @@ AntiAPP/
 2. **生产部署**: `gunicorn -b 0.0.0.0:7860 app:app`
 3. **Docker**: `docker build -t data-analysis-tool . && docker run -p 7860:7860 data-analysis-tool`
 4. **Windows 桌面版**: 运行 `Output/` 目录下的安装程序
+

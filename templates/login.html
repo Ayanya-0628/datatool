@@ -1,16 +1,16 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>登录 - 数据分析工具</title>
+    <title>登录 - SlyLab</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet"/>
     <script src="https://cdn.tailwindcss.com"></script>
     <style> body { font-family: 'Noto Sans SC', sans-serif; } </style>
 </head>
 <body class="bg-slate-100 min-h-screen flex items-center justify-center p-4">
     <div class="w-full max-w-sm bg-white rounded-xl shadow-lg p-8">
-        <h1 class="text-xl font-bold text-slate-800 mb-2">数据分析工具</h1>
+        <h1 class="text-xl font-bold text-slate-800 mb-2">SlyLab</h1>
         <p class="text-slate-500 text-sm mb-6">请登录后使用</p>
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
@@ -38,3 +38,5 @@
     </div>
 </body>
 </html>
+
+

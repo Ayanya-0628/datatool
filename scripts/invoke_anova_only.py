@@ -1,17 +1,17 @@
-import sys
+﻿import sys
 import os
 import pandas as pd
 import time
 
-# Add AntiAPP to path
-antiapp_path = r"E:\AntiAPP"
-sys.path.append(antiapp_path)
-os.chdir(antiapp_path)
+# Add project root to path
+SlyLab_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(SlyLab_path)
+os.chdir(SlyLab_path)
 
 try:
     from app import run_analysis, sanitize_dataframe
 except ImportError as e:
-    print(f"Error importing AntiAPP: {e}")
+    print(f"Error importing SlyLab: {e}")
     sys.exit(1)
 
 file_path = r'C:\Users\16342\Desktop\BaiduSyncdisk\博士\2023-2024苏涛再生稻试验\产量文章\合并图\2024芽长芽重数据分析7D.xlsx'
@@ -57,3 +57,6 @@ for i in range(max_retries):
     except Exception as e:
         print(f"An error occurred: {e}")
         sys.exit(1)
+
+
+

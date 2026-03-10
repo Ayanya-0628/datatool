@@ -1,11 +1,11 @@
-import sys
+﻿import sys
 def generate_html():
     html_content = """<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="utf-8"/>
     <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-    <title>数据分析工具 Pro</title>
+    <title>SlyLab Pro</title>
     
     <!-- Old CSS -->
     <link rel="stylesheet" href="/static/style.css?v=35">
@@ -71,7 +71,7 @@ def generate_html():
                     <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white">
                         <span class="material-symbols-outlined text-xl">analytics</span>
                     </div>
-                    <h1 class="text-slate-900 dark:text-white text-lg font-bold leading-normal">DataAnalysis</h1>
+                    <h1 class="text-slate-900 dark:text-white text-lg font-bold leading-normal">SlyLab</h1>
                 </div>
                 <p class="text-slate-500 dark:text-slate-400 text-xs font-normal pl-10">v2.4.1 专业版</p>
             </div>
@@ -472,8 +472,13 @@ def generate_html():
 </body>
 </html>
 """
-    with open('e:/AntiAPP/templates/dashboard.html', 'w', encoding='utf-8') as f:
+    import os
+    output_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'templates', 'dashboard.html')
+    with open(output_path, 'w', encoding='utf-8') as f:
         f.write(html_content)
 
 if __name__ == '__main__':
     generate_html()
+
+
+

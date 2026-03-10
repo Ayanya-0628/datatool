@@ -4,8 +4,12 @@ __pycache__/
 *.pyo
 *.pyd
 .Python
+.pytest_cache/
+
+# Virtual Environment
 env/
 venv/
+.venv/
 .env
 
 # Flask
@@ -17,14 +21,28 @@ build/
 dist/
 *.spec
 
+# Build Output
+Output/
+
+# Archives
+archives/
+
 # Excel/Data
 exports/
 *.xlsx
 *.csv
 !multi_sheet_test.xlsx
+!test_messy_data.xlsx
 
 # Logs
 *.log
+
+# Backup files
+*.bak
+
+# Temporary files
+_tmp_*
+standalone/_tmp_*
 
 # Editor
 .idea/
@@ -34,3 +52,6 @@ exports/
 # OS
 .DS_Store
 Thumbs.db
+
+# Playwright MCP
+.playwright-mcp/
