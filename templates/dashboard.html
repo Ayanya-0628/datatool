@@ -225,6 +225,18 @@
                         <span class="text-slate-400 dark:text-slate-500 text-xs">宽⇄长表转换</span>
                     </div>
                 </label>
+
+                <label
+                    class="method-card group flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-800 p-3 hover:border-slate-300 dark:hover:border-slate-700 transition-all">
+                    <input type="radio" name="analysis-type" value="barchart" class="hidden peer">
+                    <div
+                        class="h-5 w-5 rounded-full border-2 border-slate-300 group-hover:border-slate-400 peer-checked:border-primary peer-checked:border-4 transition-all">
+                    </div>
+                    <div class="flex grow flex-col">
+                        <span class="text-slate-900 dark:text-white text-sm font-medium">分组柱状图 (Bar Chart)</span>
+                        <span class="text-slate-400 dark:text-slate-500 text-xs">多级分组 + 误差棒</span>
+                    </div>
+                </label>
             </div>
 
             <!-- 变量设置 (#variable-section) & 分析按钮 (#action-section) -->
@@ -483,6 +495,166 @@
                         </div>
                         <div class="p-4 flex-1 overflow-auto flex items-center justify-center">
                             <img id="heatmap-preview" class="max-h-full max-w-full" src="" alt="热图预览">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bar Chart Section -->
+                <div id="barchart-section" hidden class="flex flex-col p-6 h-full overflow-hidden">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-3">
+                            <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-md">
+                                <span class="material-symbols-outlined text-xl">bar_chart</span>
+                            </div>
+                            <div>
+                                <h2 class="text-lg font-bold text-slate-900">分组柱状图</h2>
+                                <p class="text-xs text-slate-500">支持多级分组标签、误差棒与显著性标记</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Content: Left Config + Right Preview -->
+                    <div class="flex gap-4 flex-1 min-h-0">
+                        <!-- Left: Configuration Panel -->
+                        <div class="w-80 shrink-0 flex flex-col gap-3 overflow-y-auto pr-1">
+                            <!-- 分组列选择 -->
+                            <div class="bg-white rounded-xl border border-slate-200 shadow-sm">
+                                <div class="p-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                                    <span class="text-sm font-bold text-slate-700">分组列（拖拽排序）</span>
+                                    <span id="bc-group-count" class="bg-primary/10 text-primary text-xs px-2 py-0.5 rounded-full font-bold">0</span>
+                                </div>
+                                <div class="p-3">
+                                    <div class="flex flex-wrap gap-1.5 mb-2">
+                                        <select id="bc-add-group-select" class="flex-1 text-sm border border-slate-200 rounded-lg px-2 py-1.5">
+                                            <option value="">选择列...</option>
+                                        </select>
+                                        <button id="bc-add-group-btn" class="px-3 py-1.5 bg-primary text-white text-sm rounded-lg hover:bg-blue-600 transition-colors">
+                                            <span class="material-symbols-outlined text-sm" style="vertical-align: middle">add</span>
+                                        </button>
+                                    </div>
+                                    <ul id="bc-group-list" class="flex flex-col gap-1 min-h-[40px]"></ul>
+                                    <p class="text-[10px] text-slate-400 mt-1">从外到内排列，最内层为柱子颜色分组</p>
+                                </div>
+                            </div>
+
+                            <!-- 数值列选择 -->
+                            <div class="bg-white rounded-xl border border-slate-200 shadow-sm">
+                                <div class="p-3 bg-slate-50 border-b border-slate-200">
+                                    <span class="text-sm font-bold text-slate-700">数值列（Y轴）</span>
+                                </div>
+                                <div class="p-3">
+                                    <select id="bc-value-col" class="w-full text-sm border border-slate-200 rounded-lg px-2 py-1.5">
+                                        <option value="">选择数值列...</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- 柱子颜色 -->
+                            <div class="bg-white rounded-xl border border-slate-200 shadow-sm">
+                                <div class="p-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                                    <span class="text-sm font-bold text-slate-700">柱子颜色</span>
+                                    <button id="bc-refresh-colors" class="text-xs text-primary hover:underline">刷新分组</button>
+                                </div>
+                                <div id="bc-color-list" class="p-3 flex flex-col gap-2">
+                                    <p class="text-xs text-slate-400">选择分组列后自动显示</p>
+                                </div>
+                            </div>
+
+                            <!-- 表格底色 -->
+                            <div class="bg-white rounded-xl border border-slate-200 shadow-sm">
+                                <div class="p-3 bg-slate-50 border-b border-slate-200">
+                                    <span class="text-sm font-bold text-slate-700">底部表格颜色</span>
+                                </div>
+                                <div class="p-3 flex flex-col gap-2" id="bc-band-colors">
+                                    <label class="flex items-center justify-between text-sm">
+                                        <span>第一行 (内层分组)</span>
+                                        <input type="color" value="#FFFFFF" class="w-6 h-6 p-0 border-0 rounded cursor-pointer">
+                                    </label>
+                                    <label class="flex items-center justify-between text-sm">
+                                        <span>第二行 (次外层)</span>
+                                        <input type="color" value="#FFFFCC" class="w-6 h-6 p-0 border-0 rounded cursor-pointer">
+                                    </label>
+                                    <label class="flex items-center justify-between text-sm">
+                                        <span>第三行 (最外层)</span>
+                                        <input type="color" value="#00CED1" class="w-6 h-6 p-0 border-0 rounded cursor-pointer">
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- 图表选项 -->
+                            <div class="bg-white rounded-xl border border-slate-200 shadow-sm">
+                                <div class="p-3 bg-slate-50 border-b border-slate-200">
+                                    <span class="text-sm font-bold text-slate-700">图表选项</span>
+                                </div>
+                                <div class="p-3 flex flex-col gap-2">
+                                    <label class="flex items-center gap-2 text-sm cursor-pointer">
+                                        <input type="checkbox" id="bc-show-errbar" checked class="rounded text-primary focus:ring-primary h-4 w-4">
+                                        显示误差棒 (SD)
+                                    </label>
+                                    <label class="flex items-center gap-2 text-sm cursor-pointer">
+                                        <input type="checkbox" id="bc-show-letters" checked class="rounded text-primary focus:ring-primary h-4 w-4">
+                                        显示显著性字母 (LSD)
+                                    </label>
+                                    <div class="flex items-center gap-2">
+                                        <label class="text-sm">Y轴标签</label>
+                                        <input type="text" id="bc-ylabel" placeholder="自动" class="flex-1 text-sm border border-slate-200 rounded px-2 py-1">
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <label class="text-sm">标题</label>
+                                        <input type="text" id="bc-title" placeholder="可选" class="flex-1 text-sm border border-slate-200 rounded px-2 py-1">
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <label class="text-sm whitespace-nowrap">Y轴范围</label>
+                                        <input type="number" id="bc-ymin" placeholder="最小" class="w-16 text-sm border border-slate-200 rounded px-2 py-1" step="any">
+                                        <span class="text-xs text-slate-400">~</span>
+                                        <input type="number" id="bc-ymax" placeholder="最大" class="w-16 text-sm border border-slate-200 rounded px-2 py-1" step="any">
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <label class="text-sm whitespace-nowrap">刻度间距</label>
+                                        <input type="number" id="bc-ystep" placeholder="自动" class="w-20 text-sm border border-slate-200 rounded px-2 py-1" step="any" min="0.1">
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <label class="text-sm whitespace-nowrap">柱宽</label>
+                                        <input type="range" id="bc-barwidth" min="0.3" max="0.9" step="0.05" value="0.6" class="flex-1">
+                                        <span id="bc-barwidth-val" class="text-xs text-slate-500 w-8">0.6</span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <label class="text-sm whitespace-nowrap">字号</label>
+                                        <input type="range" id="bc-fontsize" min="8" max="16" step="1" value="10" class="flex-1">
+                                        <span id="bc-fontsize-val" class="text-xs text-slate-500 w-8">10</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 生成按钮 -->
+                            <button id="btn-gen-barchart"
+                                class="w-full flex items-center justify-center gap-2 px-3 py-3 bg-gradient-to-r from-amber-500 to-orange-600 text-white text-sm font-bold rounded-lg hover:from-amber-600 hover:to-orange-700 transition-all shadow-md">
+                                <span class="material-symbols-outlined text-lg">bar_chart</span>
+                                生成分组柱状图
+                            </button>
+                        </div>
+
+                        <!-- Right: Chart Preview -->
+                        <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
+                            <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col flex-1">
+                                <div class="p-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
+                                    <div class="flex items-center gap-2">
+                                        <span class="material-symbols-outlined text-amber-500 text-lg">bar_chart</span>
+                                        <span class="text-sm font-bold text-slate-700">图表预览</span>
+                                    </div>
+                                    <div class="flex gap-2" id="bc-download-btns" hidden>
+                                        <button class="bc-download-btn px-3 py-1.5 border border-slate-200 bg-white hover:bg-slate-50 rounded text-xs transition-colors shadow-sm" data-format="png">PNG</button>
+                                        <button class="bc-download-btn px-3 py-1.5 border border-slate-200 bg-white hover:bg-slate-50 rounded text-xs transition-colors shadow-sm" data-format="pdf">PDF</button>
+                                        <button class="bc-download-btn px-3 py-1.5 border border-slate-200 bg-white hover:bg-slate-50 rounded text-xs transition-colors shadow-sm" data-format="svg">SVG</button>
+                                    </div>
+                                </div>
+                                <div id="bc-chart-preview" class="flex-1 overflow-auto flex items-center justify-center p-4">
+                                    <div class="text-center text-slate-400">
+                                        <span class="material-symbols-outlined text-[48px] mb-2 opacity-40">bar_chart</span>
+                                        <p class="text-sm">配置分组列和数值列后，点击「生成分组柱状图」</p>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

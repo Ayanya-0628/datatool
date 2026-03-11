@@ -8,7 +8,7 @@ const state = {
     dataId: null,
     columns: [],
     columnTypes: {}, // { colName: 'numeric' | 'categorical' }
-    analysisType: 'anova', // 'anova', 'pca', 'cluster'
+    analysisType: 'anova', // 'anova', 'pca', 'cluster', 'heatmap', 'barchart'
 
     // ANOVA / Cluster Config
     factors: [], // Also used as Cluster Labels (optional)
@@ -32,6 +32,11 @@ const state = {
 
     // Reshape Config
     reshapeMode: 'melt', // 'melt' or 'pivot'
+
+    // Barchart Config
+    barchartGroupCols: [],
+    barchartValueCol: '',
+    barchartColors: {},  // { groupVal: '#hex' }
 
     results: null
 };
@@ -128,6 +133,7 @@ function init() {
     initAnalysis();
     initHeatmap();
     initReshape();
+    initBarChart();
     initExport();
     initTabs();
     initSheetModal();
@@ -268,6 +274,8 @@ function updateUIForMethod() {
         dom.resultSection.hidden = true;
         dom.emptyState.hidden = true;
         if (dom.heatmapSection) dom.heatmapSection.hidden = true;
+        const barchartSection = document.getElementById('barchart-section');
+        if (barchartSection) barchartSection.hidden = true;
         if (reshapeSection) reshapeSection.hidden = false;
         // 默认进入 smart 模式
         setTimeout(() => setReshapeMode('smart'), 50);
@@ -276,6 +284,24 @@ function updateUIForMethod() {
         return;
     } else {
         if (reshapeSection) reshapeSection.hidden = true;
+    }
+
+    // Barchart mode: similar to reshape, has its own panel
+    const barchartSection = document.getElementById('barchart-section');
+    if (type === 'barchart') {
+        dom.variableSection.hidden = true;
+        dom.actionSection.hidden = true;
+        dom.resultSection.hidden = true;
+        dom.emptyState.hidden = true;
+        if (dom.heatmapSection) dom.heatmapSection.hidden = true;
+        if (reshapeSection) reshapeSection.hidden = true;
+        if (barchartSection) {
+            barchartSection.hidden = false;
+            populateBarchartSelectors();
+        }
+        return;
+    } else {
+        if (barchartSection) barchartSection.hidden = true;
     }
 
     // Heatmap Section Visibility
@@ -330,6 +356,11 @@ function updateSidebarSummary() {
         targetLabel = '列数';
         factorCount = state.reshapeMode === 'melt' ? 1 : 0;
         targetCount = state.columns.length;
+    } else if (type === 'barchart') {
+        factorLabel = '分组';
+        targetLabel = '数值列';
+        factorCount = state.barchartGroupCols.length;
+        targetCount = state.barchartValueCol ? 1 : 0;
     }
 
     dom.summaryFactors.parentNode.innerHTML = `
@@ -1887,6 +1918,441 @@ async function executeLlmTidy() {
     }
 }
 window.executeLlmTidy = executeLlmTidy;
+
+// ===== Bar Chart Module =====
+
+function initBarChart() {
+    const addGroupBtn = document.getElementById('bc-add-group-btn');
+    const addGroupSelect = document.getElementById('bc-add-group-select');
+    const refreshColorsBtn = document.getElementById('bc-refresh-colors');
+    const genBtn = document.getElementById('btn-gen-barchart');
+    const barwidthSlider = document.getElementById('bc-barwidth');
+    const fontsizeSlider = document.getElementById('bc-fontsize');
+
+    if (addGroupBtn) {
+        addGroupBtn.onclick = () => {
+            const val = addGroupSelect.value;
+            if (!val) return;
+            if (state.barchartGroupCols.includes(val)) {
+                return showToast('该列已添加', 'info');
+            }
+            state.barchartGroupCols.push(val);
+            renderBarchartGroupList();
+            refreshBarchartColors();
+        };
+    }
+
+    if (refreshColorsBtn) {
+        refreshColorsBtn.onclick = () => refreshBarchartColors();
+    }
+
+    if (genBtn) {
+        genBtn.onclick = () => generateBarChart();
+    }
+
+    if (barwidthSlider) {
+        barwidthSlider.oninput = () => {
+            document.getElementById('bc-barwidth-val').textContent = barwidthSlider.value;
+        };
+    }
+
+    if (fontsizeSlider) {
+        fontsizeSlider.oninput = () => {
+            document.getElementById('bc-fontsize-val').textContent = fontsizeSlider.value;
+        };
+    }
+
+    // Download buttons
+    document.querySelectorAll('.bc-download-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const format = e.target.dataset.format || 'png';
+            downloadBarChart(format);
+        });
+    });
+}
+
+function populateBarchartSelectors() {
+    const addGroupSelect = document.getElementById('bc-add-group-select');
+    const valueSelect = document.getElementById('bc-value-col');
+
+    if (!addGroupSelect || !valueSelect) return;
+
+    // Populate add-group select
+    addGroupSelect.innerHTML = '<option value="">选择列...</option>';
+    state.columns.forEach(col => {
+        const opt = document.createElement('option');
+        opt.value = col;
+        opt.textContent = col;
+        addGroupSelect.appendChild(opt);
+    });
+
+    // Populate value column select (numeric only)
+    valueSelect.innerHTML = '<option value="">选择数值列...</option>';
+    state.columns.forEach(col => {
+        if (state.columnTypes[col] === 'numeric') {
+            const opt = document.createElement('option');
+            opt.value = col;
+            opt.textContent = col;
+            valueSelect.appendChild(opt);
+        }
+    });
+
+    // Restore selection
+    if (state.barchartValueCol) {
+        valueSelect.value = state.barchartValueCol;
+    }
+
+    valueSelect.onchange = () => {
+        state.barchartValueCol = valueSelect.value;
+    };
+
+    renderBarchartGroupList();
+}
+
+function renderBarchartGroupList() {
+    const list = document.getElementById('bc-group-list');
+    const countEl = document.getElementById('bc-group-count');
+    if (!list) return;
+
+    list.innerHTML = '';
+    countEl.textContent = state.barchartGroupCols.length;
+
+    state.barchartGroupCols.forEach((col, idx) => {
+        const li = document.createElement('li');
+        li.className = 'flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm cursor-move group';
+        li.draggable = true;
+        li.dataset.index = idx;
+
+        const leftPart = document.createElement('div');
+        leftPart.className = 'flex items-center gap-2';
+
+        const dragHandle = document.createElement('span');
+        dragHandle.className = 'material-symbols-outlined text-slate-300 text-sm group-hover:text-slate-500';
+        dragHandle.textContent = 'drag_indicator';
+
+        const badge = document.createElement('span');
+        badge.className = 'bg-primary/10 text-primary text-[10px] px-1.5 py-0.5 rounded font-bold';
+        badge.textContent = idx === state.barchartGroupCols.length - 1 ? '内层' : `第${idx + 1}层`;
+
+        const text = document.createElement('span');
+        text.textContent = col;
+
+        leftPart.appendChild(dragHandle);
+        leftPart.appendChild(badge);
+        leftPart.appendChild(text);
+
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'text-slate-400 hover:text-red-500 transition-colors';
+        removeBtn.innerHTML = '<span class="material-symbols-outlined text-sm">close</span>';
+        removeBtn.onclick = () => {
+            state.barchartGroupCols.splice(idx, 1);
+            renderBarchartGroupList();
+            refreshBarchartColors();
+        };
+
+        li.appendChild(leftPart);
+        li.appendChild(removeBtn);
+
+        // Drag & Drop for reordering
+        li.addEventListener('dragstart', (e) => {
+            e.dataTransfer.setData('text/plain', idx.toString());
+            li.classList.add('opacity-50');
+        });
+        li.addEventListener('dragend', () => {
+            li.classList.remove('opacity-50');
+        });
+        li.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            li.classList.add('border-primary');
+        });
+        li.addEventListener('dragleave', () => {
+            li.classList.remove('border-primary');
+        });
+        li.addEventListener('drop', (e) => {
+            e.preventDefault();
+            li.classList.remove('border-primary');
+            const fromIdx = parseInt(e.dataTransfer.getData('text/plain'));
+            const toIdx = idx;
+            if (fromIdx !== toIdx) {
+                const [moved] = state.barchartGroupCols.splice(fromIdx, 1);
+                state.barchartGroupCols.splice(toIdx, 0, moved);
+                renderBarchartGroupList();
+                refreshBarchartColors();
+            }
+        });
+
+        list.appendChild(li);
+    });
+}
+
+const DEFAULT_BAR_COLORS = [
+    '#4472C4', '#ED7D31', '#A5A5A5', '#FFC000',
+    '#5B9BD5', '#70AD47', '#264478', '#9B59B6',
+    '#E74C3C', '#1ABC9C', '#F39C12', '#2ECC71'
+];
+
+async function refreshBarchartColors() {
+    const colorList = document.getElementById('bc-color-list');
+    if (!colorList) return;
+
+    if (state.barchartGroupCols.length === 0) {
+        colorList.innerHTML = '<p class="text-xs text-slate-400">选择分组列后自动显示</p>';
+        return;
+    }
+
+    // Get inner group values from backend
+    try {
+        const res = await fetch('/api/barchart_preview_groups', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                data_id: state.dataId,
+                group_cols: state.barchartGroupCols
+            })
+        });
+        const data = await res.json();
+        if (data.error) {
+            colorList.innerHTML = `<p class="text-xs text-red-400">${data.error}</p>`;
+            return;
+        }
+
+        const innerVals = data.inner_vals || [];
+        colorList.innerHTML = '';
+
+        if (innerVals.length === 0) {
+            colorList.innerHTML = '<p class="text-xs text-slate-400">无有效分组值</p>';
+            return;
+        }
+
+        // Caption
+        const caption = document.createElement('p');
+        caption.className = 'text-[10px] text-slate-400 mb-1';
+        caption.textContent = `最内层分组: ${data.inner_col}  (共 ${innerVals.length} 组)`;
+        colorList.appendChild(caption);
+
+        innerVals.forEach((val, i) => {
+            const row = document.createElement('div');
+            row.className = 'flex items-center gap-2';
+
+            const colorInput = document.createElement('input');
+            colorInput.type = 'color';
+            colorInput.className = 'w-8 h-8 rounded border border-slate-200 cursor-pointer';
+            colorInput.value = state.barchartColors[val] || DEFAULT_BAR_COLORS[i % DEFAULT_BAR_COLORS.length];
+            colorInput.onchange = () => {
+                state.barchartColors[val] = colorInput.value;
+            };
+            // Initialize color in state
+            if (!state.barchartColors[val]) {
+                state.barchartColors[val] = colorInput.value;
+            }
+
+            const label = document.createElement('span');
+            label.className = 'text-sm text-slate-700 truncate';
+            label.textContent = val;
+            label.title = val;
+
+            row.appendChild(colorInput);
+            row.appendChild(label);
+            colorList.appendChild(row);
+        });
+
+    } catch (e) {
+        colorList.innerHTML = `<p class="text-xs text-red-400">加载分组失败: ${e.message}</p>`;
+    }
+}
+
+// Store last generated chart data for re-download in different formats
+let lastBarChartData = null;
+
+async function generateBarChart() {
+    if (!state.dataId) return showToast('请先上传数据', 'error');
+
+    if (state.barchartGroupCols.length === 0) {
+        return showToast('请至少选择一个分组列', 'error');
+    }
+
+    const valueCol = document.getElementById('bc-value-col')?.value;
+    if (!valueCol) return showToast('请选择数值列', 'error');
+
+    state.barchartValueCol = valueCol;
+
+    // Collect colors in order of inner_vals
+    const barColors = [];
+    const colorList = document.getElementById('bc-color-list');
+    if (colorList) {
+        const colorInputs = colorList.querySelectorAll('input[type=color]');
+        colorInputs.forEach(inp => barColors.push(inp.value));
+    }
+
+    // 收集底部表格颜色
+    const bandColors = [];
+    const bandColorBox = document.getElementById('bc-band-colors');
+    if (bandColorBox) {
+        bandColorBox.querySelectorAll('input[type=color]').forEach(inp => bandColors.push(inp.value));
+    }
+
+    const showErrBar = document.getElementById('bc-show-errbar')?.checked ?? true;
+    const showLetters = document.getElementById('bc-show-letters')?.checked ?? false;
+    const yLabel = document.getElementById('bc-ylabel')?.value || '';
+    const title = document.getElementById('bc-title')?.value || '';
+    const barWidth = parseFloat(document.getElementById('bc-barwidth')?.value || '0.6');
+    const fontSize = parseInt(document.getElementById('bc-fontsize')?.value || '10');
+    const yMin = document.getElementById('bc-ymin')?.value || null;
+    const yMax = document.getElementById('bc-ymax')?.value || null;
+    const yStep = document.getElementById('bc-ystep')?.value || null;
+
+    const genBtn = document.getElementById('btn-gen-barchart');
+    if (genBtn) {
+        genBtn.disabled = true;
+        genBtn.innerHTML = '<span class="material-symbols-outlined text-sm animate-spin">progress_activity</span> 生成中...';
+    }
+
+    try {
+        const res = await fetch('/api/analyze_barchart', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                data_id: state.dataId,
+                group_cols: state.barchartGroupCols,
+                value_col: valueCol,
+                bar_colors: barColors.length > 0 ? barColors : null,
+                band_colors: bandColors.length > 0 ? bandColors : null,
+                show_error_bars: showErrBar,
+                show_letters: showLetters,
+                y_label: yLabel,
+                title: title,
+                bar_width: barWidth,
+                font_size: fontSize,
+                y_min: yMin,
+                y_max: yMax,
+                y_step: yStep,
+                output_format: 'png'
+            })
+        });
+
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+
+        lastBarChartData = data;
+
+        // Show chart
+        const preview = document.getElementById('bc-chart-preview');
+        if (preview && data.plot) {
+            const img = document.createElement('img');
+            img.src = `data:image/${data.plot.format};base64,${data.plot.data}`;
+            img.alt = 'Bar Chart';
+            img.style.maxWidth = '100%';
+            img.style.maxHeight = '100%';
+            img.style.objectFit = 'contain';
+            img.style.boxShadow = '0 2px 12px rgba(0,0,0,0.08)';
+            img.style.borderRadius = '8px';
+            preview.innerHTML = '';
+            preview.appendChild(img);
+        }
+
+        // Show download buttons
+        const dlBtns = document.getElementById('bc-download-btns');
+        if (dlBtns) dlBtns.hidden = false;
+
+        showToast('分组柱状图生成成功', 'success');
+
+    } catch (err) {
+        showToast('分组柱状图生成失败: ' + err.message, 'error');
+    } finally {
+        if (genBtn) {
+            genBtn.disabled = false;
+            genBtn.innerHTML = '<span class="material-symbols-outlined text-lg">bar_chart</span> 生成分组柱状图';
+        }
+    }
+}
+
+async function downloadBarChart(format) {
+    if (!state.dataId || state.barchartGroupCols.length === 0 || !state.barchartValueCol) {
+        return showToast('请先生成分组柱状图', 'error');
+    }
+
+    showToast(`正在导出 ${format.toUpperCase()} 格式...`, 'info');
+
+    // Collect colors
+    const barColors = [];
+    const colorList = document.getElementById('bc-color-list');
+    if (colorList) {
+        const colorInputs = colorList.querySelectorAll('input[type=color]');
+        colorInputs.forEach(inp => barColors.push(inp.value));
+    }
+
+    // 收集底部表格颜色
+    const bandColors = [];
+    const bandColorBox = document.getElementById('bc-band-colors');
+    if (bandColorBox) {
+        bandColorBox.querySelectorAll('input[type=color]').forEach(inp => bandColors.push(inp.value));
+    }
+
+    const showErrBar = document.getElementById('bc-show-errbar')?.checked ?? true;
+    const showLetters = document.getElementById('bc-show-letters')?.checked ?? false;
+    const yLabel = document.getElementById('bc-ylabel')?.value || '';
+    const title = document.getElementById('bc-title')?.value || '';
+    const barWidth = parseFloat(document.getElementById('bc-barwidth')?.value || '0.6');
+    const fontSize = parseInt(document.getElementById('bc-fontsize')?.value || '10');
+    const yMin = document.getElementById('bc-ymin')?.value || null;
+    const yMax = document.getElementById('bc-ymax')?.value || null;
+    const yStep = document.getElementById('bc-ystep')?.value || null;
+
+    try {
+        const res = await fetch('/api/analyze_barchart', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                data_id: state.dataId,
+                group_cols: state.barchartGroupCols,
+                value_col: state.barchartValueCol,
+                bar_colors: barColors.length > 0 ? barColors : null,
+                band_colors: bandColors.length > 0 ? bandColors : null,
+                show_error_bars: showErrBar,
+                show_letters: showLetters,
+                y_label: yLabel,
+                title: title,
+                bar_width: barWidth,
+                font_size: fontSize,
+                y_min: yMin,
+                y_max: yMax,
+                y_step: yStep,
+                output_format: format
+            })
+        });
+
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+
+        if (data.plot && data.plot.data) {
+            // Convert base64 to blob and download
+            const byteString = atob(data.plot.data);
+            const ab = new ArrayBuffer(byteString.length);
+            const ia = new Uint8Array(ab);
+            for (let i = 0; i < byteString.length; i++) {
+                ia[i] = byteString.charCodeAt(i);
+            }
+
+            const mimeTypes = {
+                'png': 'image/png',
+                'pdf': 'application/pdf',
+                'svg': 'image/svg+xml'
+            };
+            const blob = new Blob([ab], { type: mimeTypes[format] || 'application/octet-stream' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `bar_chart.${format}`;
+            a.click();
+            URL.revokeObjectURL(url);
+
+            showToast('导出成功', 'success');
+        }
+
+    } catch (err) {
+        showToast('导出失败: ' + err.message, 'error');
+    }
+}
 
 // Start
 document.addEventListener('DOMContentLoaded', init);

@@ -55,6 +55,13 @@ try:
 except ImportError:
     HAS_HEATMAP_MODULE = False
 
+# 导入柱状图模块
+try:
+    from modules.barchart import generate_bar_chart
+    HAS_BARCHART_MODULE = True
+except ImportError:
+    HAS_BARCHART_MODULE = False
+
 # 导入智能数据整理模块
 try:
     from smart_tidy import scan_excel_structure, execute_smart_tidy
@@ -2212,6 +2219,146 @@ def llm_tidy():
     except Exception as e:
         traceback.print_exc()
         return jsonify({'error': f'双擎整理失败: {str(e)}'}), 500
+
+
+# =====================================================
+# 柱状图 (Bar Chart) API
+# =====================================================
+
+@app.route('/api/analyze_barchart', methods=['POST'])
+def analyze_barchart():
+    """生成分组柱状图"""
+    if not HAS_BARCHART_MODULE:
+        return jsonify({'error': '柱状图模块未安装'}), 500
+
+    data = request.json
+    data_id = data.get('data_id')
+    group_cols = data.get('group_cols', [])  # 分组列
+    value_col = data.get('value_col', '')    # 数值列
+    bar_colors = data.get('bar_colors', None)
+    band_colors = data.get('band_colors', None)
+    show_error_bars = data.get('show_error_bars', True)
+    show_letters = data.get('show_letters', False)
+    letter_col = data.get('letter_col', None)
+    y_label = data.get('y_label', '')
+    chart_title = data.get('title', '')
+    fig_width = data.get('fig_width', None)
+    fig_height = data.get('fig_height', 6)
+    bar_width = data.get('bar_width', 0.6)
+    font_size = data.get('font_size', 10)
+    output_format = data.get('output_format', 'png')
+    y_min = data.get('y_min', None)
+    y_max = data.get('y_max', None)
+    y_step = data.get('y_step', None)
+    # 转为 float（前端可能传字符串或空）
+    if y_min is not None and y_min != '':
+        y_min = float(y_min)
+    else:
+        y_min = None
+    if y_max is not None and y_max != '':
+        y_max = float(y_max)
+    else:
+        y_max = None
+    if y_step is not None and y_step != '':
+        y_step = float(y_step)
+    else:
+        y_step = None
+
+    if not data_id or data_id not in data_store:
+        return jsonify({'error': '数据已过期，请重新上传文件'}), 400
+
+    if not group_cols:
+        return jsonify({'error': '请至少选择一个分组列'}), 400
+
+    if not value_col:
+        return jsonify({'error': '请选择一个数值列'}), 400
+
+    try:
+        df = data_store[data_id]
+
+        # 验证列名存在
+        for col in group_cols:
+            if col not in df.columns:
+                return jsonify({'error': f'分组列 "{col}" 不存在'}), 400
+        if value_col not in df.columns:
+            return jsonify({'error': f'数值列 "{value_col}" 不存在'}), 400
+
+        # 获取最内层分组的唯一值，用于前端颜色选择器
+        inner_col = group_cols[-1] if len(group_cols) > 1 else group_cols[0]
+        work_df = df.copy()
+        for col in group_cols:
+            work_df[col] = work_df[col].astype(str).replace('nan', pd.NA)
+            work_df[col] = work_df[col].ffill()
+        inner_vals = list(pd.unique(work_df[inner_col].dropna().astype(str)))
+
+        result = generate_bar_chart(
+            df=df,
+            group_cols=group_cols,
+            value_col=value_col,
+            bar_colors=bar_colors,
+            band_colors=band_colors,
+            show_error_bars=show_error_bars,
+            show_letters=show_letters,
+            letter_col=letter_col,
+            y_label=y_label or value_col,
+            title=chart_title,
+            fig_width=fig_width,
+            fig_height=fig_height,
+            bar_width=bar_width,
+            font_size=font_size,
+            output_format=output_format,
+            y_min=y_min,
+            y_max=y_max,
+            y_step=y_step
+        )
+
+        return jsonify({
+            'success': True,
+            'plot': result,
+            'inner_col': inner_col,
+            'inner_vals': inner_vals
+        })
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': f'柱状图生成失败: {str(e)}'}), 500
+
+
+@app.route('/api/barchart_preview_groups', methods=['POST'])
+def barchart_preview_groups():
+    """预览分组信息（用于前端配置颜色）"""
+    data = request.json
+    data_id = data.get('data_id')
+    group_cols = data.get('group_cols', [])
+
+    if not data_id or data_id not in data_store:
+        return jsonify({'error': '数据已过期'}), 400
+
+    if not group_cols:
+        return jsonify({'error': '请选择分组列'}), 400
+
+    try:
+        df = data_store[data_id]
+        work_df = df.copy()
+
+        for col in group_cols:
+            if col not in df.columns:
+                return jsonify({'error': f'列 "{col}" 不存在'}), 400
+            work_df[col] = work_df[col].astype(str).replace('nan', pd.NA)
+            work_df[col] = work_df[col].ffill()
+
+        # 最内层分组的唯一值
+        inner_col = group_cols[-1] if len(group_cols) > 1 else group_cols[0]
+        inner_vals = list(pd.unique(work_df[inner_col].dropna().astype(str)))
+
+        return jsonify({
+            'inner_col': inner_col,
+            'inner_vals': inner_vals
+        })
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/healthz', methods=['GET'])
