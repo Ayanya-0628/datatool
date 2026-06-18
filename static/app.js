@@ -3,12 +3,30 @@
  * Version: 2.1 - Variable Selection Modal
  */
 
+const APP_BASE_PATH = (() => {
+    const marker = '/slylab-app/';
+    return window.location.pathname.startsWith(marker) ? marker.replace(/\/$/, '') : '';
+})();
+
+const apiUrl = (path) => `${APP_BASE_PATH}${path}`;
+
+const nativeFetch = window.fetch.bind(window);
+window.fetch = (input, init) => {
+    if (typeof input === 'string' && input.startsWith('/api/')) {
+        return nativeFetch(apiUrl(input), init);
+    }
+    if (input instanceof Request && new URL(input.url).pathname.startsWith('/api/')) {
+        return nativeFetch(new Request(apiUrl(new URL(input.url).pathname), input), init);
+    }
+    return nativeFetch(input, init);
+};
+
 // ===== State Management =====
 const state = {
     dataId: null,
     columns: [],
     columnTypes: {}, // { colName: 'numeric' | 'categorical' }
-    analysisType: 'anova', // 'anova', 'pca', 'cluster', 'heatmap', 'barchart'
+    analysisType: 'anova', // 'anova', 'pca', 'cluster', 'heatmap', 'barchart', 'nature'
 
     // ANOVA / Cluster Config
     factors: [], // Also used as Cluster Labels (optional)
@@ -134,6 +152,7 @@ function init() {
     initHeatmap();
     initReshape();
     initBarChart();
+    initNaturePlot();
     initExport();
     initTabs();
     initSheetModal();
@@ -244,6 +263,8 @@ function clearData() {
     dom.emptyState.hidden = false;
     dom.resultSection.hidden = true;
     dom.loadingSection.hidden = true;
+    const natureSection = document.getElementById('nature-section');
+    if (natureSection) natureSection.hidden = true;
 }
 
 // ===== Method Selection =====
@@ -259,6 +280,7 @@ function initMethodSelection() {
 function updateUIForMethod() {
     const type = state.analysisType;
     const reshapeSection = document.getElementById('reshape-section');
+    const natureSection = document.getElementById('nature-section');
 
     // Update Sidebar config visibility
     if (type === 'cluster') {
@@ -276,6 +298,7 @@ function updateUIForMethod() {
         if (dom.heatmapSection) dom.heatmapSection.hidden = true;
         const barchartSection = document.getElementById('barchart-section');
         if (barchartSection) barchartSection.hidden = true;
+        if (natureSection) natureSection.hidden = true;
         if (reshapeSection) reshapeSection.hidden = false;
         // 默认进入 smart 模式
         setTimeout(() => setReshapeMode('smart'), 50);
@@ -295,6 +318,7 @@ function updateUIForMethod() {
         dom.emptyState.hidden = true;
         if (dom.heatmapSection) dom.heatmapSection.hidden = true;
         if (reshapeSection) reshapeSection.hidden = true;
+        if (natureSection) natureSection.hidden = true;
         if (barchartSection) {
             barchartSection.hidden = false;
             populateBarchartSelectors();
@@ -302,6 +326,23 @@ function updateUIForMethod() {
         return;
     } else {
         if (barchartSection) barchartSection.hidden = true;
+    }
+
+    // Nature plot mode: independent figure panel
+    if (type === 'nature') {
+        dom.variableSection.hidden = true;
+        dom.actionSection.hidden = true;
+        dom.resultSection.hidden = true;
+        dom.emptyState.hidden = true;
+        if (dom.heatmapSection) dom.heatmapSection.hidden = true;
+        if (reshapeSection) reshapeSection.hidden = true;
+        if (natureSection) {
+            natureSection.hidden = false;
+            populateNatureSelectors();
+        }
+        return;
+    } else {
+        if (natureSection) natureSection.hidden = true;
     }
 
     // Heatmap Section Visibility
@@ -361,6 +402,11 @@ function updateSidebarSummary() {
         targetLabel = '数值列';
         factorCount = state.barchartGroupCols.length;
         targetCount = state.barchartValueCol ? 1 : 0;
+    } else if (type === 'nature') {
+        factorLabel = '图型';
+        targetLabel = '变量';
+        factorCount = 1;
+        targetCount = 0;
     }
 
     dom.summaryFactors.parentNode.innerHTML = `
@@ -948,6 +994,9 @@ function renderResults(data, type) {
         renderPlot('cluster-scatter-plot', data.scatter_plot, '聚类_散点图.png');
         renderPlot('cluster-heatmap-plot', data.heatmap_plot, '聚类_热图.png');
         renderPlot('cluster-corr-heatmap-plot', data.corr_heatmap_plot, '聚类_相关性热图.png');
+        if (data.circular_heatmap_plot) {
+            renderPlot('cluster-circular-heatmap-plot', data.circular_heatmap_plot, '聚类_环形热图.png');
+        }
 
         // Render Cluster Data Table (Specific rendering for highlighted cells)
         const dt = document.getElementById('cluster-data-table');
@@ -2352,6 +2401,259 @@ async function downloadBarChart(format) {
     } catch (err) {
         showToast('导出失败: ' + err.message, 'error');
     }
+}
+
+// ===== Nature Plot Logic =====
+let lastNaturePlot = null;
+
+function escapeHtml(value) {
+    return String(value).replace(/[&<>"']/g, ch => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    }[ch]));
+}
+
+function initNaturePlot() {
+    const chartType = document.getElementById('nature-chart-type');
+    const genBtn = document.getElementById('btn-gen-nature');
+    const downloadBtn = document.getElementById('nature-download-btn');
+
+    if (chartType) {
+        chartType.addEventListener('change', () => {
+            updateNatureFieldVisibility();
+            populateNatureSelectors();
+        });
+    }
+    if (genBtn) genBtn.addEventListener('click', generateNaturePlot);
+    if (downloadBtn) downloadBtn.addEventListener('click', downloadNaturePlot);
+}
+
+async function ensureNatureColumns() {
+    if (state.columns.length > 0) return true;
+    if (!state.dataId) return false;
+
+    try {
+        const res = await fetch('/api/data_columns', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ data_id: state.dataId })
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        state.columns = data.columns || [];
+        state.columnTypes = data.column_types || {};
+        return state.columns.length > 0;
+    } catch (err) {
+        showToast('读取列名失败: ' + err.message, 'error');
+        return false;
+    }
+}
+
+async function populateNatureSelectors() {
+    const xSelect = document.getElementById('nature-x-col');
+    const ySelect = document.getElementById('nature-y-cols');
+    const estimateSelect = document.getElementById('nature-estimate-col');
+    const lowSelect = document.getElementById('nature-ci-low-col');
+    const highSelect = document.getElementById('nature-ci-high-col');
+    if (!xSelect || !ySelect) return;
+
+    const hasColumns = await ensureNatureColumns();
+    if (!hasColumns) {
+        xSelect.innerHTML = '<option value="">请先上传数据</option>';
+        ySelect.innerHTML = '';
+        [estimateSelect, lowSelect, highSelect].forEach(sel => {
+            if (sel) sel.innerHTML = '';
+        });
+        updateNatureFieldVisibility();
+        return;
+    }
+
+    const numericCols = state.columns.filter(col => state.columnTypes[col] === 'numeric');
+    const optionHtml = (cols) => cols.map(col => `<option value="${escapeHtml(col)}">${escapeHtml(col)}</option>`).join('');
+
+    xSelect.innerHTML = optionHtml(state.columns);
+    ySelect.innerHTML = optionHtml(numericCols);
+    [estimateSelect, lowSelect, highSelect].forEach(sel => {
+        if (sel) sel.innerHTML = optionHtml(numericCols);
+    });
+
+    const chartType = document.getElementById('nature-chart-type')?.value || 'grouped_bar';
+    if (chartType !== 'forest') {
+        Array.from(ySelect.options).slice(0, Math.min(2, ySelect.options.length)).forEach(opt => {
+            opt.selected = true;
+        });
+    } else {
+        autoSelectNatureForestColumns();
+    }
+    updateNatureFieldVisibility();
+}
+
+function updateNatureFieldVisibility() {
+    const chartType = document.getElementById('nature-chart-type')?.value || 'grouped_bar';
+    const forestFields = document.getElementById('nature-forest-fields');
+    const ySelect = document.getElementById('nature-y-cols');
+    if (forestFields) forestFields.hidden = chartType !== 'forest';
+    if (ySelect) ySelect.disabled = chartType === 'forest';
+}
+
+function autoSelectNatureForestColumns() {
+    const numericCols = state.columns.filter(col => state.columnTypes[col] === 'numeric');
+    const pick = (patterns, fallbackIndex) => {
+        const found = numericCols.find(col => patterns.some(pattern => pattern.test(col)));
+        return found || numericCols[fallbackIndex] || '';
+    };
+    const estimate = document.getElementById('nature-estimate-col');
+    const low = document.getElementById('nature-ci-low-col');
+    const high = document.getElementById('nature-ci-high-col');
+    if (estimate) estimate.value = pick([/estimate/i, /effect/i, /coef/i, /or$/i], 0);
+    if (low) low.value = pick([/low/i, /lower/i, /ci.*l/i], 1);
+    if (high) high.value = pick([/high/i, /upper/i, /ci.*h/i], 2);
+}
+
+function selectedNatureYCols() {
+    const select = document.getElementById('nature-y-cols');
+    if (!select) return [];
+    return Array.from(select.selectedOptions).map(opt => opt.value);
+}
+
+function buildNatureConfig(chartType, format) {
+    const xCol = document.getElementById('nature-x-col')?.value || '';
+    const yCols = selectedNatureYCols();
+    const config = {
+        format,
+        palette: document.getElementById('nature-palette')?.value || 'nature',
+        title: document.getElementById('nature-title')?.value || '',
+        xlabel: document.getElementById('nature-x-label')?.value || '',
+        ylabel: document.getElementById('nature-y-label')?.value || '',
+        font_size: 7,
+        dpi: 300
+    };
+
+    if (chartType === 'grouped_bar') {
+        config.category_col = xCol;
+        config.value_cols = yCols;
+    } else if (chartType === 'trend') {
+        config.x_col = xCol;
+        config.y_cols = yCols;
+    } else if (chartType === 'heatmap') {
+        config.row_label_col = xCol;
+        config.value_cols = yCols;
+        config.annotate = document.getElementById('nature-annotate')?.checked ?? true;
+    } else if (chartType === 'forest') {
+        config.label_col = xCol;
+        config.estimate_col = document.getElementById('nature-estimate-col')?.value || '';
+        config.ci_low_col = document.getElementById('nature-ci-low-col')?.value || '';
+        config.ci_high_col = document.getElementById('nature-ci-high-col')?.value || '';
+    }
+    return config;
+}
+
+async function generateNaturePlot() {
+    if (!state.dataId) return showToast('请先上传数据', 'error');
+
+    const chartType = document.getElementById('nature-chart-type')?.value || 'grouped_bar';
+    const format = document.getElementById('nature-format')?.value || 'png';
+    const config = buildNatureConfig(chartType, format);
+    const needsYCols = ['grouped_bar', 'trend', 'heatmap'].includes(chartType);
+
+    if (!config.category_col && chartType === 'grouped_bar') return showToast('请选择类别列', 'error');
+    if (!config.x_col && chartType === 'trend') return showToast('请选择 X 轴列', 'error');
+    if (!config.row_label_col && chartType === 'heatmap') return showToast('请选择行标签列', 'error');
+    if (needsYCols && ((!config.value_cols && !config.y_cols) || (config.value_cols || config.y_cols).length === 0)) {
+        return showToast('请选择至少一个数值列', 'error');
+    }
+    if (chartType === 'forest' && (!config.label_col || !config.estimate_col || !config.ci_low_col || !config.ci_high_col)) {
+        return showToast('森林图需要标签列、估计值和置信区间列', 'error');
+    }
+
+    const btn = document.getElementById('btn-gen-nature');
+    if (btn) {
+        btn.disabled = true;
+        btn.classList.add('opacity-70');
+    }
+
+    try {
+        const res = await fetch('/api/nature_plot', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ data_id: state.dataId, chart_type: chartType, config })
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+
+        lastNaturePlot = data.plot;
+        renderNaturePreview(data.plot);
+        showToast('Nature 图生成完成', 'success');
+    } catch (err) {
+        showToast('生成失败: ' + err.message, 'error');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.classList.remove('opacity-70');
+        }
+    }
+}
+
+function renderNaturePreview(plot) {
+    const preview = document.getElementById('nature-chart-preview');
+    const downloadBtn = document.getElementById('nature-download-btn');
+    if (!preview || !plot) return;
+
+    const fmt = plot.format || 'png';
+    const mimeTypes = {
+        png: 'image/png',
+        jpeg: 'image/jpeg',
+        jpg: 'image/jpeg',
+        svg: 'image/svg+xml',
+        pdf: 'application/pdf',
+        tiff: 'image/tiff'
+    };
+
+    if (['png', 'jpeg', 'jpg', 'svg'].includes(fmt)) {
+        preview.innerHTML = `<img class="max-w-full max-h-full object-contain" src="data:${mimeTypes[fmt]};base64,${plot.data}" alt="Nature plot preview">`;
+    } else {
+        preview.innerHTML = `
+            <div class="text-center text-slate-500">
+                <span class="material-symbols-outlined text-[48px] mb-2 opacity-50">description</span>
+                <p class="text-sm">${fmt.toUpperCase()} 已生成，可点击右上角下载</p>
+            </div>
+        `;
+    }
+    if (downloadBtn) {
+        downloadBtn.hidden = false;
+        downloadBtn.textContent = `下载 ${fmt.toUpperCase()}`;
+    }
+}
+
+function downloadNaturePlot() {
+    if (!lastNaturePlot || !lastNaturePlot.data) return showToast('请先生成图表', 'error');
+
+    const fmt = lastNaturePlot.format || 'png';
+    const mimeTypes = {
+        png: 'image/png',
+        jpeg: 'image/jpeg',
+        jpg: 'image/jpeg',
+        svg: 'image/svg+xml',
+        pdf: 'application/pdf',
+        tiff: 'image/tiff'
+    };
+    const byteString = atob(lastNaturePlot.data);
+    const buffer = new ArrayBuffer(byteString.length);
+    const bytes = new Uint8Array(buffer);
+    for (let i = 0; i < byteString.length; i++) {
+        bytes[i] = byteString.charCodeAt(i);
+    }
+    const blob = new Blob([buffer], { type: mimeTypes[fmt] || 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `nature_plot.${fmt}`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('导出成功', 'success');
 }
 
 // Start

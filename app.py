@@ -62,6 +62,13 @@ try:
 except ImportError:
     HAS_BARCHART_MODULE = False
 
+# 导入 Nature 风格 Python 绘图模块
+try:
+    from modules.nature_plot import generate_nature_plot
+    HAS_NATURE_PLOT_MODULE = True
+except ImportError:
+    HAS_NATURE_PLOT_MODULE = False
+
 # 导入智能数据整理模块
 try:
     from smart_tidy import scan_excel_structure, execute_smart_tidy
@@ -105,6 +112,17 @@ try:
     app.json.sort_keys = False
 except AttributeError:
     pass  # Flask 旧版本兼容
+
+
+@app.after_request
+def add_cache_headers(response):
+    """避免前端更新后浏览器继续使用旧的 app.js。"""
+    if request.path == '/' or request.path.endswith('/app.js'):
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+    return response
+
 
 # 全局错误处理器 - 确保所有错误返回 JSON 而不是 HTML
 @app.errorhandler(Exception)
@@ -1549,6 +1567,10 @@ def analyze_cluster():
                 results['dendrogram'] = analyzer.plot_dendrogram(format='png')
             except Exception as e:
                 results['dendrogram_error'] = str(e)
+            try:
+                results['circular_heatmap_plot'] = analyzer.plot_circular_heatmap(format='png')
+            except Exception as e:
+                results['circular_heatmap_error'] = str(e)
 
         return jsonify(results)
     
@@ -1742,6 +1764,51 @@ def export_heatmap_image():
     except Exception as e:
         traceback.print_exc()
         return jsonify({'error': f'热图导出失败: {str(e)}'}), 500
+
+
+@app.route('/api/nature_plot', methods=['POST'])
+def nature_plot():
+    """生成 Nature 风格 Python 论文图。"""
+    if not HAS_NATURE_PLOT_MODULE:
+        return jsonify({'error': 'Nature 绘图模块未安装'}), 500
+
+    data = request.json or {}
+    data_id = data.get('data_id')
+    chart_type = data.get('chart_type', '')
+    config = data.get('config', {})
+
+    if not data_id or data_id not in data_store:
+        return jsonify({'error': '数据已过期，请重新上传文件'}), 400
+
+    try:
+        plot = generate_nature_plot(data_store[data_id], chart_type, config)
+        return jsonify({
+            'success': True,
+            'chart_type': chart_type,
+            'plot': plot
+        })
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': f'Nature 绘图失败: {str(e)}'}), 500
+
+
+@app.route('/api/data_columns', methods=['POST'])
+def data_columns():
+    """按 data_id 返回当前数据集列名与列类型，供前端面板兜底恢复。"""
+    data = request.json or {}
+    data_id = data.get('data_id')
+
+    if not data_id or data_id not in data_store:
+        return jsonify({'error': '数据已过期，请重新上传文件'}), 400
+
+    df = data_store[data_id]
+    type_analysis = analyze_column_types(df)
+    return jsonify({
+        'success': True,
+        'columns': list(df.columns),
+        'rows': len(df),
+        **type_analysis
+    })
 
 
 # =====================================================
@@ -2093,9 +2160,10 @@ def llm_tidy():
     data = request.json or {}
     data_id = data.get('data_id')
     drop_avg = data.get('drop_avg', True)
-    api_key = (data.get('api_key') or '').strip()
-    model = data.get('model')
-    api_base = data.get('api_base')
+    # API 配置：前端传入优先，否则回退服务器环境变量（如 NVIDIA integrate 配置）
+    api_key = (data.get('api_key') or os.environ.get('LLM_API_KEY') or '').strip()
+    model = data.get('model') or os.environ.get('LLM_MODEL')
+    api_base = data.get('api_base') or os.environ.get('LLM_API_BASE')
 
     if not data_id or data_id not in raw_file_store:
         return jsonify({'error': '该文件不是 Excel 格式或数据已过期，请重新上传'}), 400
@@ -2371,6 +2439,8 @@ def healthz():
 def shutdown():
     """接收前端关闭请求，终止后台进程"""
     # 仅在非生产环境或明确允许时启用
+    if os.environ.get('ALLOW_SHUTDOWN', '').lower() not in ('1', 'true', 'yes'):
+        return jsonify({'error': 'shutdown disabled'}), 403
     print("收到关闭指令，正在终止服务...")
 
     def kill_server():

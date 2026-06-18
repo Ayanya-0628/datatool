@@ -1,5 +1,18 @@
 ﻿# AGENTS.md instructions for E:\SlyLab
 
+## 全局规则
+
+唯一全局事实源：
+- `C:\Users\16342\AGENTS.md`
+
+开始任务读取顺序：
+1. 先读本文件。
+2. 再读 `progress.md`。
+3. 必要时读 `README.md`、`docs/DEPLOY.md`、`docs/CODEMAPS/INDEX.md`。
+
+说明：
+- `.sisyphus/` 是旧工具残留，只作为历史记录参考；新任务不再新建或强依赖 `.sisyphus`。
+
 ## 版本记录规范
 
 ### 1. 存档操作

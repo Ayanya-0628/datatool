@@ -9,5 +9,6 @@ gunicorn>=21.0.0
 python-dotenv>=1.0.0
 scikit-learn>=1.0.0
 matplotlib>=3.7.0
+requests>=2.31.0
 PyQt6>=6.4.0
 PyQt6-WebEngine>=6.4.0

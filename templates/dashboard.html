@@ -7,7 +7,7 @@
     <title>数据分析工具 Pro</title>
 
     <!-- Old CSS -->
-    <link rel="stylesheet" href="/static/style.css?v=43">
+    <link rel="stylesheet" href="static/style.css?v=44">
 
     <!-- Google Fonts & Tailwind -->
     <link href="https://fonts.googleapis.com" rel="preconnect" />
@@ -237,6 +237,18 @@
                         <span class="text-slate-400 dark:text-slate-500 text-xs">多级分组 + 误差棒</span>
                     </div>
                 </label>
+
+                <label
+                    class="method-card group flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-800 p-3 hover:border-slate-300 dark:hover:border-slate-700 transition-all">
+                    <input type="radio" name="analysis-type" value="nature" class="hidden peer">
+                    <div
+                        class="h-5 w-5 rounded-full border-2 border-slate-300 group-hover:border-slate-400 peer-checked:border-primary peer-checked:border-4 transition-all">
+                    </div>
+                    <div class="flex grow flex-col">
+                        <span class="text-slate-900 dark:text-white text-sm font-medium">Nature 论文图</span>
+                        <span class="text-slate-400 dark:text-slate-500 text-xs">Python 出图 + SVG/PDF</span>
+                    </div>
+                </label>
             </div>
 
             <!-- 变量设置 (#variable-section) & 分析按钮 (#action-section) -->
@@ -448,6 +460,8 @@
                                     class="flex-1 plot-container shadow-sm border border-slate-200 rounded-xl"></div>
                                 <div id="cluster-heatmap-plot"
                                     class="flex-1 plot-container shadow-sm border border-slate-200 rounded-xl"></div>
+                                <div id="cluster-circular-heatmap-plot"
+                                    class="flex-1 plot-container shadow-sm border border-slate-200 rounded-xl"></div>
                             </div>
                         </div>
                         <div id="panel-cluster-data" class="tab-pane flex-layout h-full flex-col">
@@ -652,6 +666,133 @@
                                     <div class="text-center text-slate-400">
                                         <span class="material-symbols-outlined text-[48px] mb-2 opacity-40">bar_chart</span>
                                         <p class="text-sm">配置分组列和数值列后，点击「生成分组柱状图」</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Nature Plot Section -->
+                <div id="nature-section" hidden class="flex flex-col p-6 h-full overflow-hidden">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-3">
+                            <div
+                                class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-slate-800 to-teal-600 text-white shadow-md">
+                                <span class="material-symbols-outlined text-xl">science</span>
+                            </div>
+                            <div>
+                                <h2 class="text-lg font-bold text-slate-900">Nature 风格 Python 绘图</h2>
+                                <p class="text-xs text-slate-500">分组柱状图、趋势图、热图、森林图；支持可编辑 SVG 与 PDF</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-4 flex-1 min-h-0">
+                        <div class="w-80 shrink-0 flex flex-col gap-3 overflow-y-auto pr-1">
+                            <div class="bg-white rounded-xl border border-slate-200 shadow-sm">
+                                <div class="p-3 bg-slate-50 border-b border-slate-200">
+                                    <span class="text-sm font-bold text-slate-700">图型与导出</span>
+                                </div>
+                                <div class="p-3 flex flex-col gap-2">
+                                    <label class="text-xs font-semibold text-slate-500">图型</label>
+                                    <select id="nature-chart-type" class="w-full text-sm border border-slate-200 rounded-lg px-2 py-1.5">
+                                        <option value="grouped_bar">分组柱状图</option>
+                                        <option value="trend">趋势图</option>
+                                        <option value="heatmap">热图</option>
+                                        <option value="forest">森林图</option>
+                                    </select>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <label class="text-xs font-semibold text-slate-500">格式</label>
+                                            <select id="nature-format" class="w-full text-sm border border-slate-200 rounded-lg px-2 py-1.5">
+                                                <option value="png">PNG</option>
+                                                <option value="svg">SVG</option>
+                                                <option value="pdf">PDF</option>
+                                                <option value="tiff">TIFF</option>
+                                                <option value="jpeg">JPEG</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="text-xs font-semibold text-slate-500">配色</label>
+                                            <select id="nature-palette" class="w-full text-sm border border-slate-200 rounded-lg px-2 py-1.5">
+                                                <option value="nature">Nature</option>
+                                                <option value="nmi_pastel">NMI Pastel</option>
+                                                <option value="clinical">Clinical</option>
+                                                <option value="material">Material</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="bg-white rounded-xl border border-slate-200 shadow-sm">
+                                <div class="p-3 bg-slate-50 border-b border-slate-200">
+                                    <span class="text-sm font-bold text-slate-700">变量</span>
+                                </div>
+                                <div class="p-3 flex flex-col gap-2">
+                                    <label class="text-xs font-semibold text-slate-500">X / 类别 / 标签列</label>
+                                    <select id="nature-x-col" class="w-full text-sm border border-slate-200 rounded-lg px-2 py-1.5"></select>
+                                    <label class="text-xs font-semibold text-slate-500">数值列（可多选）</label>
+                                    <select id="nature-y-cols" multiple size="6"
+                                        class="w-full text-sm border border-slate-200 rounded-lg px-2 py-1.5"></select>
+                                    <div id="nature-forest-fields" class="grid grid-cols-3 gap-2 pt-1" hidden>
+                                        <div>
+                                            <label class="text-xs font-semibold text-slate-500">估计值</label>
+                                            <select id="nature-estimate-col" class="w-full text-xs border border-slate-200 rounded px-1 py-1"></select>
+                                        </div>
+                                        <div>
+                                            <label class="text-xs font-semibold text-slate-500">CI 下限</label>
+                                            <select id="nature-ci-low-col" class="w-full text-xs border border-slate-200 rounded px-1 py-1"></select>
+                                        </div>
+                                        <div>
+                                            <label class="text-xs font-semibold text-slate-500">CI 上限</label>
+                                            <select id="nature-ci-high-col" class="w-full text-xs border border-slate-200 rounded px-1 py-1"></select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="bg-white rounded-xl border border-slate-200 shadow-sm">
+                                <div class="p-3 bg-slate-50 border-b border-slate-200">
+                                    <span class="text-sm font-bold text-slate-700">标题与坐标</span>
+                                </div>
+                                <div class="p-3 flex flex-col gap-2">
+                                    <input type="text" id="nature-title" placeholder="标题（可选）"
+                                        class="w-full text-sm border border-slate-200 rounded-lg px-2 py-1.5">
+                                    <input type="text" id="nature-x-label" placeholder="X 轴标签（可选）"
+                                        class="w-full text-sm border border-slate-200 rounded-lg px-2 py-1.5">
+                                    <input type="text" id="nature-y-label" placeholder="Y 轴标签（可选）"
+                                        class="w-full text-sm border border-slate-200 rounded-lg px-2 py-1.5">
+                                    <label class="flex items-center gap-2 text-sm cursor-pointer">
+                                        <input type="checkbox" id="nature-annotate" checked
+                                            class="rounded text-primary focus:ring-primary h-4 w-4">
+                                        热图显示数值
+                                    </label>
+                                </div>
+                            </div>
+
+                            <button id="btn-gen-nature"
+                                class="w-full flex items-center justify-center gap-2 px-3 py-3 bg-gradient-to-r from-slate-800 to-teal-600 text-white text-sm font-bold rounded-lg hover:from-slate-900 hover:to-teal-700 transition-all shadow-md">
+                                <span class="material-symbols-outlined text-lg">science</span>
+                                生成 Nature 图
+                            </button>
+                        </div>
+
+                        <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
+                            <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col flex-1">
+                                <div class="p-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
+                                    <div class="flex items-center gap-2">
+                                        <span class="material-symbols-outlined text-teal-600 text-lg">image</span>
+                                        <span class="text-sm font-bold text-slate-700">图表预览</span>
+                                    </div>
+                                    <button id="nature-download-btn" hidden
+                                        class="px-3 py-1.5 border border-slate-200 bg-white hover:bg-slate-50 rounded text-xs transition-colors shadow-sm">下载</button>
+                                </div>
+                                <div id="nature-chart-preview" class="flex-1 overflow-auto flex items-center justify-center p-4">
+                                    <div class="text-center text-slate-400">
+                                        <span class="material-symbols-outlined text-[48px] mb-2 opacity-40">science</span>
+                                        <p class="text-sm">选择图型和变量后，点击「生成 Nature 图」</p>
                                     </div>
                                 </div>
                             </div>
@@ -906,7 +1047,7 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=43"></script>
+    <script src="static/app.js?v=45"></script>
     <script>
         window.addEventListener('beforeunload', function () {
             navigator.sendBeacon('/api/shutdown');

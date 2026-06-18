@@ -20,9 +20,9 @@ CLUSTER_COLORS = ['#E41A1C', '#4DAF4A', '#377EB8', '#984EA3', '#FF7F00', '#A6562
 # Font settings
 plt.rcParams['font.family'] = 'sans-serif'
 # 优先使用无衬线字体以支持中文，涵盖 Windows/Linux/Mac 常用中文字体
-font_list = ['Microsoft YaHei', 'SimHei', 'WenQuanYi Micro Hei', 'PingFang SC', 'Heiti TC', 'SimSun', 'DejaVu Sans', 'Arial', 'sans-serif']
+font_list = ['Microsoft YaHei', 'SimHei', 'Noto Sans CJK SC', 'WenQuanYi Micro Hei', 'PingFang SC', 'Heiti TC', 'SimSun', 'DejaVu Sans', 'Arial', 'sans-serif']
 plt.rcParams['font.sans-serif'] = font_list + plt.rcParams['font.sans-serif']
-plt.rcParams['font.serif'] = ['Times New Roman', 'SimSun'] + font_list
+plt.rcParams['font.serif'] = ['Times New Roman', 'Noto Serif CJK SC', 'SimSun'] + font_list
 plt.rcParams['axes.unicode_minus'] = False
 
 

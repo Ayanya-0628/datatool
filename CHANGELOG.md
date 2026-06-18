@@ -1,4 +1,27 @@
-﻿## 2026-03-05 22:33
+## 2026-06-18 18:00
+- **修复**: 服务器中文绘图豆腐块（方块）问题
+  - 根因：服务器（OpenCloudOS）未安装任何中文字体，matplotlib 回退到无中文字形的 DejaVu Sans
+  - 服务器安装 Noto CJK 简体字体（`google-noto-sans-cjk-sc-fonts` / `google-noto-serif-cjk-sc-fonts`）
+  - `modules/heatmap.py` 字体名单补入 `Noto Sans CJK SC` / `Noto Serif CJK SC`
+  - `modules/nature_plot.py` 字体名单补入中文字体，并增加 `axes.unicode_minus=False`
+- **新功能**: AI 智能整理接入 NVIDIA integrate（`deepseek-ai/deepseek-v4-flash`）
+  - `app.py` `/api/llm_tidy` 的 api_key/api_base/model 支持回退到环境变量 `LLM_API_KEY` / `LLM_API_BASE` / `LLM_MODEL`，前端不填也能触发 LLM 兜底
+  - `.env.example` 增加 LLM 配置示例
+- **依赖**: `requirements.txt` / `requirements-server.txt` 补充 `requests`（LLM 兜底所需，此前服务器 venv 缺失导致 AI 整理实际不可用）
+
+## 2026-03-11 17:21
+- **新功能**: 分组柱状图模块 (`modules/barchart.py`)
+  - 支持多级分组标签（论文风格色带表格样式）
+  - 自动 LSD 显著性字母标记（黑色、非斜体、Times New Roman）
+  - 误差棒 (SD)、自定义柱色和色带颜色
+  - 四边轴线显示（上/右轴仅刻度线、无标签）
+  - 图例固定右上角、无边框
+  - Y 轴范围 (min/max) 和刻度间距可配置
+  - 数值型分组标签自动去除尾部 `.0`（如 140.0 → 140）
+- **后端**: `app.py` 新增 `/api/analyze_barchart` 端点
+- **前端**: `dashboard.html` 新增分组柱状图配置面板，`app.js` 新增生成/下载逻辑
+
+## 2026-03-05 22:33
 - **新功能**: 数据整形模块集成单元格可编辑功能
   - 新增 `/api/update_cell` 后端 API，支持编辑原始数据 (`data_store`) 和整理后数据 (`reshape_store`)
   - `renderMiniTable()` 重构支持 `editable` 选项，双击单元格进入编辑模式
