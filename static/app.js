@@ -156,6 +156,7 @@ function init() {
     initExport();
     initTabs();
     initSheetModal();
+    initMethodGallery();
 }
 
 // ===== Upload Logic =====
@@ -232,7 +233,7 @@ function loadDataSuccess(data, filename) {
     dom.fileName.textContent = filename;
     dom.fileRows.textContent = `${data.rows} 行数据`;
 
-    dom.methodSection.hidden = false;
+    dom.methodSection.hidden = true;
     dom.variableSection.hidden = false;
     dom.actionSection.hidden = false;
     dom.emptyState.hidden = true;
@@ -275,6 +276,32 @@ function initMethodSelection() {
             updateUIForMethod();
         });
     });
+}
+
+// ===== Method Gallery (首屏方法画廊) =====
+function initMethodGallery() {
+    document.querySelectorAll('.gallery-card').forEach(card => {
+        card.addEventListener('click', () => enterWorkspace(card.dataset.method));
+    });
+    const backBtn = document.getElementById('back-to-gallery');
+    if (backBtn) backBtn.addEventListener('click', backToGallery);
+}
+
+function enterWorkspace(method) {
+    state.analysisType = method || 'anova';
+    // 同步选中侧栏对应的方法 radio（保留快速切换）
+    dom.methodInputs.forEach(input => { input.checked = (input.value === state.analysisType); });
+    // 隐藏画廊，进入工作区
+    const gallery = document.getElementById('method-gallery');
+    if (gallery) gallery.hidden = true;
+    // 方法已在画廊选定，侧栏不再显示方法列表，腾出空间给参数设置（切换方法走「返回方法」）
+    dom.methodSection.hidden = true;
+    updateUIForMethod();
+}
+
+function backToGallery() {
+    const gallery = document.getElementById('method-gallery');
+    if (gallery) gallery.hidden = false;
 }
 
 function updateUIForMethod() {
@@ -363,6 +390,52 @@ function updateUIForMethod() {
     }
 
     updateSidebarSummary();
+    renderInlineVars();
+}
+
+// ===== 侧栏内联变量选择（anova/cluster/pca，免开弹窗直接勾选） =====
+function renderInlineVars() {
+    const box = document.getElementById('inline-vars');
+    if (!box) return;
+    const type = state.analysisType;
+    if (!['anova', 'cluster', 'pca'].includes(type) || !state.dataId) {
+        box.hidden = true;
+        box.innerHTML = '';
+        return;
+    }
+    const cols = state.columns || [];
+    const isNum = c => state.columnTypes[c] === 'numeric';
+    let groups;
+    if (type === 'pca') {
+        groups = [
+            { title: '分组（可选）', cands: cols.filter(c => !isNum(c)), key: 'pcaGroupVars' },
+            { title: '分析变量（数值）', cands: cols.filter(isNum), key: 'pcaSelectedVars' },
+        ];
+    } else {
+        const fTitle = type === 'cluster' ? '标签 / 分组' : '因子（分组变量）';
+        const tTitle = type === 'cluster' ? '聚类特征（数值）' : '性状（数值指标）';
+        groups = [
+            { title: fTitle, cands: cols, key: 'factors' },
+            { title: tTitle, cands: cols.filter(isNum), key: 'targets' },
+        ];
+    }
+    box.hidden = false;
+    box.innerHTML = groups.map(g => {
+        const sel = state[g.key] || [];
+        const items = g.cands.map(c => {
+            const safe = String(c).replace(/"/g, '&quot;');
+            const checked = sel.includes(c) ? 'checked' : '';
+            return `<label class="flex items-center gap-2 text-xs cursor-pointer py-0.5"><input type="checkbox" value="${safe}" ${checked} class="rounded text-primary focus:ring-primary h-3.5 w-3.5"><span class="truncate">${safe}</span></label>`;
+        }).join('');
+        return `<div class="flex flex-col gap-1"><p class="text-xs font-semibold text-slate-600 dark:text-slate-300">${g.title}</p><div class="max-h-36 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-2 flex flex-col" data-key="${g.key}">${items || '<span class="text-xs text-slate-400">无可选列</span>'}</div></div>`;
+    }).join('');
+    box.querySelectorAll('div[data-key]').forEach(container => {
+        const key = container.dataset.key;
+        container.addEventListener('change', () => {
+            state[key] = Array.from(container.querySelectorAll('input:checked')).map(i => i.value);
+            updateSidebarSummary();
+        });
+    });
 }
 
 function updateSidebarSummary() {
@@ -476,6 +549,7 @@ function confirmVariableChanges() {
     if (tempState.heatmapY) state.heatmapY = [...tempState.heatmapY];
 
     updateSidebarSummary();
+    renderInlineVars();
     closeVariableModal();
     showToast('变量设置已更新', 'success');
 }

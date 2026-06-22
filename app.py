@@ -187,10 +187,10 @@ temp_file_store = {}
 # 存储原始 Excel 文件字节（智能整理需要 openpyxl 读取合并单元格）
 raw_file_store = {}  # {data_id: {'content': bytes, 'filename': str, 'sheet_name': str|None}}
 
-# 导出文件存放目录
-EXPORT_DIR = os.path.join(APP_DATA_DIR, 'exports')
+# 导出文件存放目录（可用环境变量 SLYLAB_EXPORT_DIR 指向对象存储挂载点，如 COS /mnt/cos/...）
+EXPORT_DIR = os.environ.get('SLYLAB_EXPORT_DIR') or os.path.join(APP_DATA_DIR, 'exports')
 if not os.path.exists(EXPORT_DIR):
-    os.makedirs(EXPORT_DIR)
+    os.makedirs(EXPORT_DIR, exist_ok=True)
 
 # 可选：启用「注册后使用」（方式三云端部署时设置 ENABLE_AUTH=1）
 if os.environ.get('ENABLE_AUTH', '').lower() in ('1', 'true', 'yes'):
