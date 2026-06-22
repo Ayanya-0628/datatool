@@ -379,9 +379,6 @@
                     </div>
                 </div>
 
-                <!-- 内联变量选择（anova/cluster/pca 直接在侧栏勾选，免开弹窗） -->
-                <div id="inline-vars" hidden class="flex flex-col gap-3"></div>
-
                 <!-- Cluster Params Container inside sidebar -->
                 <div id="cluster-params" hidden
                     class="flex-col gap-2 mt-2 bg-slate-50 p-3 rounded border border-slate-200">
@@ -471,6 +468,23 @@
                     </svg>
                     <h3 class="text-lg font-bold">正在分析数据...</h3>
                     <p class="text-sm">请稍候，系统正在处理计算</p>
+                </div>
+
+                <!-- 变量配置（anova/pca/cluster，主界面顶部横向铺开） -->
+                <div id="main-var-config" hidden
+                    class="shrink-0 p-6 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                    <div class="flex items-center justify-between mb-4 gap-4">
+                        <div>
+                            <h3 class="text-base font-bold text-slate-900 dark:text-white">变量配置</h3>
+                            <p class="text-xs text-slate-500 mt-0.5">勾选用于分析的变量，可多选</p>
+                        </div>
+                        <button id="btn-analyze-main"
+                            class="flex shrink-0 items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-white text-sm font-bold shadow-sm hover:bg-blue-600 active:scale-[0.98] transition-all">
+                            <span class="material-symbols-outlined text-[20px]">rocket_launch</span>
+                            分析数据
+                        </button>
+                    </div>
+                    <div id="main-var-groups" class="grid grid-cols-1 lg:grid-cols-2 gap-5"></div>
                 </div>
 
                 <!-- Results Block -->
@@ -1167,7 +1181,7 @@
         </div>
     </div>
 
-    <script src="static/app.js?v=48"></script>
+    <script src="static/app.js?v=50"></script>
     <script>
         window.addEventListener('beforeunload', function () {
             navigator.sendBeacon('/api/shutdown');

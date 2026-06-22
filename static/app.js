@@ -393,16 +393,19 @@ function updateUIForMethod() {
     renderInlineVars();
 }
 
-// ===== 侧栏内联变量选择（anova/cluster/pca，免开弹窗直接勾选） =====
+// ===== 主界面变量配置（anova/cluster/pca，顶部横向多列铺开） =====
 function renderInlineVars() {
-    const box = document.getElementById('inline-vars');
-    if (!box) return;
+    const panel = document.getElementById('main-var-config');
+    const box = document.getElementById('main-var-groups');
+    const actionSection = document.getElementById('action-section');
+    if (!panel || !box) return;
     const type = state.analysisType;
-    if (!['anova', 'cluster', 'pca'].includes(type) || !state.dataId) {
-        box.hidden = true;
-        box.innerHTML = '';
-        return;
-    }
+    const useMain = ['anova', 'cluster', 'pca'].includes(type) && !!state.dataId;
+    panel.hidden = !useMain;
+    if (!useMain) { box.innerHTML = ''; return; }
+    // 主界面接管变量与分析，隐藏侧栏重复的分析按钮
+    if (actionSection) actionSection.hidden = true;
+
     const cols = state.columns || [];
     const isNum = c => state.columnTypes[c] === 'numeric';
     let groups;
@@ -419,19 +422,30 @@ function renderInlineVars() {
             { title: tTitle, cands: cols.filter(isNum), key: 'targets' },
         ];
     }
-    box.hidden = false;
     box.innerHTML = groups.map(g => {
         const sel = state[g.key] || [];
         const items = g.cands.map(c => {
             const safe = String(c).replace(/"/g, '&quot;');
             const checked = sel.includes(c) ? 'checked' : '';
-            return `<label class="flex items-center gap-2 text-xs cursor-pointer py-0.5"><input type="checkbox" value="${safe}" ${checked} class="rounded text-primary focus:ring-primary h-3.5 w-3.5"><span class="truncate">${safe}</span></label>`;
+            return `<label class="flex items-center gap-2 text-sm cursor-pointer py-0.5"><input type="checkbox" value="${safe}" ${checked} class="rounded text-primary focus:ring-primary h-4 w-4"><span class="truncate">${safe}</span></label>`;
         }).join('');
-        return `<div class="flex flex-col gap-1"><p class="text-xs font-semibold text-slate-600 dark:text-slate-300">${g.title}</p><div class="max-h-36 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-2 flex flex-col" data-key="${g.key}">${items || '<span class="text-xs text-slate-400">无可选列</span>'}</div></div>`;
+        return `<div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-4"><div class="flex items-center justify-between mb-3"><p class="text-sm font-semibold text-slate-700 dark:text-slate-200">${g.title}</p><span class="text-xs text-primary cursor-pointer hover:underline" data-selall="${g.key}">全选/清空</span></div><div class="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-1.5 max-h-48 overflow-y-auto" data-key="${g.key}">${items || '<span class="text-xs text-slate-400 col-span-full">无可选列</span>'}</div></div>`;
     }).join('');
     box.querySelectorAll('div[data-key]').forEach(container => {
         const key = container.dataset.key;
         container.addEventListener('change', () => {
+            state[key] = Array.from(container.querySelectorAll('input:checked')).map(i => i.value);
+            updateSidebarSummary();
+        });
+    });
+    // 全选/清空
+    box.querySelectorAll('span[data-selall]').forEach(span => {
+        span.addEventListener('click', () => {
+            const key = span.dataset.selall;
+            const container = box.querySelector(`div[data-key="${key}"]`);
+            const boxes = Array.from(container.querySelectorAll('input[type=checkbox]'));
+            const allChecked = boxes.length > 0 && boxes.every(b => b.checked);
+            boxes.forEach(b => { b.checked = !allChecked; });
             state[key] = Array.from(container.querySelectorAll('input:checked')).map(i => i.value);
             updateSidebarSummary();
         });
@@ -901,6 +915,8 @@ function openConfigModal(col) {
 // ===== Analysis Logic =====
 function initAnalysis() {
     dom.btnAnalyze.addEventListener('click', runAnalysis);
+    const mainBtn = document.getElementById('btn-analyze-main');
+    if (mainBtn) mainBtn.addEventListener('click', runAnalysis);
 }
 
 async function runAnalysis() {
@@ -1490,6 +1506,10 @@ function showSheetModal(sheets, tempId, fileName) {
                 body: JSON.stringify({ temp_id: tempId, sheet_name: sheet })
             });
             const data = await res.json();
+            if (!res.ok || data.error) {
+                showToast(data.error || '加载该工作表失败，请检查文件或换一个工作表', 'error');
+                return;
+            }
             loadDataSuccess(data, `${fileName} [${sheet}]`);
         };
         dom.sheetList.appendChild(div);
